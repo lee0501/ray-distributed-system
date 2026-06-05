@@ -1,23 +1,6 @@
 import { useState, useEffect, useRef } from "react"
 import { api } from "./api/api"
-
-// ─── 設計 token（與 Ray Admin dashboard 共用相同變數名稱）───
-const TOKEN = {
-  black: "#0a0a0a",
-  white: "#ffffff",
-  gray50: "#f8f8f6",
-  gray100: "#f0efe9",
-  gray200: "#dddcd6",
-  gray400: "#9c9a92",
-  gray600: "#5c5b56",
-  gray800: "#2a2a28",
-  green: "#1db954",
-  greenLight: "#e8f5ee",
-  amber: "#f59e0b",
-  amberLight: "#fffbeb",
-  red: "#ef4444",
-  blue: "#3b82f6",
-}
+import { TOKEN } from "./theme"
 
 // ─── 共用 style helpers ───
 const S = {
@@ -26,6 +9,7 @@ const S = {
     borderRadius: 16,
     border: `1px solid ${TOKEN.gray200}`,
     padding: "14px 16px",
+    boxShadow: "0 1px 3px rgba(0,0,0,0.04)",
   },
   label: {
     fontSize: 11,
@@ -195,7 +179,7 @@ function MapPlaceholder({ height = 200, showCar = false }) {
   return (
     <div style={{
       height, flexShrink: 0, position: "relative", overflow: "hidden",
-      background: "linear-gradient(160deg,#e8ede4 0%,#d4ddd0 40%,#c8d4c4 100%)",
+      background: "linear-gradient(155deg,#eef2f6 0%,#dde6ec 45%,#cdd9e0 100%)",
     }}>
       {/* grid lines */}
       <svg style={{ position:"absolute", inset:0, width:"100%", height:"100%", opacity:0.15 }}>
@@ -323,7 +307,7 @@ function HomeScreen({ onNext, etaData }) {
 }
 
 // ─── Screen: 確認訂單 ───
-function ConfirmScreen({ orderData, onBack, onSubmit }) {
+function ConfirmScreen({ orderData, onBack, onSubmit, submitting, errorMsg }) {
   return (
     <div style={{ display:"flex", flexDirection:"column", flex:1 }}>
       {/* header */}
@@ -360,9 +344,25 @@ function ConfirmScreen({ orderData, onBack, onSubmit }) {
           ))}
         </div>
 
+        {errorMsg && (
+          <div style={{
+            background:TOKEN.redLight, color:"#991b1b", borderRadius:12,
+            padding:"10px 14px", fontSize:13, textAlign:"center",
+          }}>
+            {errorMsg}
+          </div>
+        )}
+
+        <button
+          style={{ ...S.btnPrimary, opacity: submitting ? 0.6 : 1, cursor: submitting ? "default" : "pointer" }}
+          onClick={onSubmit}
+          disabled={submitting}
+        >
+          {submitting ? "送出中…" : "送出訂單"}
+        </button>
+        <button style={S.btnOutline} onClick={onBack} disabled={submitting}>返回修改</button>
+
         <div style={{ flex:1 }}/>
-        <button style={S.btnPrimary} onClick={onSubmit}>送出訂單</button>
-        <button style={S.btnOutline} onClick={onBack}>返回修改</button>
       </div>
     </div>
   )
@@ -581,7 +581,7 @@ function DoneScreen({ fare, onRestart }) {
 
       <div style={{ textAlign:"center" }}>
         <div style={{ fontSize:12, color:TOKEN.gray400, marginBottom:4 }}>實際費用</div>
-        <div style={{ fontSize:44, fontWeight:700, color:TOKEN.black }}>${fare}</div>
+        <div style={{ fontSize:44, fontWeight:700, color:TOKEN.black, fontVariantNumeric:"tabular-nums" }}>${fare}</div>
         <div style={{ fontSize:12, color:TOKEN.gray400, marginTop:4 }}>信用卡 ···· 4242</div>
       </div>
 
@@ -618,6 +618,8 @@ export default function RideApp() {
   const [driverInfo, setDriverInfo] = useState({ name:"王大明", rating:4.8, plate:"ABC-1234", eta:4 })
   const [fare, setFare] = useState(268)
   const [tripElapsed, setTripElapsed] = useState(0)
+  const [submitting, setSubmitting] = useState(false)  // 送出中，防重複點擊
+  const [errorMsg, setErrorMsg] = useState(null)        // 叫車失敗訊息
   const TRIP_TOTAL = 20
   const unsubRef = useRef(null)
 
@@ -647,23 +649,40 @@ export default function RideApp() {
   }
 
   const handleSubmit = async () => {
-    setTripStatus("pending")
-    setScreen("matching")
+    if (submitting) return        // 防止 await 期間重複點擊
+    setSubmitting(true)
+    setErrorMsg(null)
 
-    const { order_id } = await api.createRideOrder(orderData)
+    try {
+      const { order_id } = await api.createRideOrder(orderData)
 
-    unsubRef.current = api.subscribeRideOrder(order_id, ({ status, trip, result }) => {
-      setTripStatus(status)
-      if (status === "driver_assigned" && trip) {
-        setDriverInfo({ name: trip.driver_name, rating: trip.driver_rating, plate: trip.license_plate, eta: trip.estimated_arrival })
-        setScreen("driver")
-      } else if (status === "on_trip") {
-        setScreen("trip")
-      } else if (status === "completed") {
-        setFare(result?.fare ?? (orderData?.price ? orderData.price + 8 : 268))
-        setScreen("done")
-      }
-    })
+      setTripStatus("pending")
+      setScreen("matching")
+
+      unsubRef.current = api.subscribeRideOrder(order_id, ({ status, trip, result }) => {
+        setTripStatus(status)
+        if (status === "driver_assigned" && trip) {
+          setDriverInfo({ name: trip.driver_name, rating: trip.driver_rating, plate: trip.license_plate, eta: trip.estimated_arrival })
+          setScreen("driver")
+        } else if (status === "on_trip") {
+          setScreen("trip")
+        } else if (status === "completed") {
+          setFare(result?.fare ?? (orderData?.price ? orderData.price + 8 : 268))
+          setScreen("done")
+        } else if (status === "failed") {
+          // 配對失敗：顯示訊息、退回確認頁讓使用者重試、並清除這次訂閱
+          setErrorMsg("叫車失敗，請稍後再試")
+          setScreen("confirm")
+          if (unsubRef.current) { unsubRef.current(); unsubRef.current = null }
+        }
+      })
+    } catch (err) {
+      // 建立訂單失敗（後端錯誤／斷線）→ 退回確認頁並提示，不卡在配對中
+      setErrorMsg("無法送出訂單，請檢查連線後再試一次")
+      setScreen("confirm")
+    } finally {
+      setSubmitting(false)
+    }
   }
 
   const handleRestart = () => {
@@ -672,6 +691,7 @@ export default function RideApp() {
     setTripStatus("pending")
     setOrderData(null)
     setTripElapsed(0)
+    setErrorMsg(null)
   }
 
   return (
@@ -693,43 +713,116 @@ export default function RideApp() {
           100% { opacity:0   }
         }
 
-        -webkit-tap-highlight-color: transparent;
-        .ride-shell {
-          width: 100%;
-          height: 100%;
-          background: #ffffff;
-          display: flex;
-          flex-direction: column;
-          overflow: hidden;
+        * { -webkit-tap-highlight-color: transparent; }
+
+        /* ── 手機版（真的用手機開）：全螢幕，無外框 ── */
+        .device-stage { width: 100%; height: 100%; }
+        .device {
+          width: 100%; height: 100%;
+          display: flex; flex-direction: column;
+          background: #000;
         }
+        .device-island, .device-btn { display: none; }
+        .ride-shell {
+          width: 100%; height: 100%;
+          background: #ffffff;
+          display: flex; flex-direction: column;
+          overflow: hidden; position: relative;
+        }
+        .home-indicator {
+          position: absolute; bottom: 7px; left: 50%;
+          transform: translateX(-50%);
+          width: 130px; height: 5px; border-radius: 999px;
+          background: rgba(0,0,0,0.28); pointer-events: none; z-index: 5;
+        }
+
+        /* ── 桌面 demo：包成一支真的手機 ── */
         @media (min-width: 500px) {
-          .ride-shell {
-            position: fixed;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            width: 390px;
-            height: min(844px, calc(100vh - 48px));
-            border-radius: 40px;
-            box-shadow: 0 0 0 0.5px #dddcd6, 0 20px 60px rgba(0,0,0,0.12);
-            overflow: hidden;
+          .device-stage {
+            position: fixed; inset: 0;
+            display: flex; align-items: center; justify-content: center;
+            background: radial-gradient(circle at 50% 30%, #f4f5f8 0%, #e6e8ee 55%, #d9dbe3 100%);
           }
+          .device {
+            position: relative;
+            width: 390px; height: min(844px, calc(100vh - 56px));
+            padding: 13px;
+            background: linear-gradient(160deg, #2a2c30 0%, #0c0d0f 100%);
+            border-radius: 56px;
+            box-shadow:
+              0 0 0 2px #3a3c40,
+              0 30px 70px rgba(0,0,0,0.35),
+              inset 0 0 2px rgba(255,255,255,0.25);
+          }
+          .ride-shell {
+            border-radius: 44px;
+            box-shadow: inset 0 0 0 1px rgba(0,0,0,0.4);
+          }
+          /* 動態島 */
+          .device-island {
+            display: block; position: absolute;
+            top: 25px; left: 50%; transform: translateX(-50%);
+            width: 116px; height: 33px; border-radius: 999px;
+            background: #000; z-index: 20;
+          }
+          /* 側邊實體按鍵 */
+          .device-btn {
+            display: block; position: absolute;
+            background: linear-gradient(90deg, #1a1b1d, #404247);
+            border-radius: 2px;
+          }
+          .device-btn--vol-up  { left: -3px; top: 150px; width: 3px; height: 52px; border-radius: 3px 0 0 3px; }
+          .device-btn--vol-dn  { left: -3px; top: 214px; width: 3px; height: 52px; border-radius: 3px 0 0 3px; }
+          .device-btn--power   { right: -3px; top: 190px; width: 3px; height: 78px;
+            background: linear-gradient(270deg, #1a1b1d, #404247); border-radius: 0 3px 3px 0; }
         }
       `}</style>
 
-      <div className="ride-shell">
-        <div style={{ padding:"12px 20px 8px", display:"flex", justifyContent:"space-between", fontSize:11, fontWeight:600, color:TOKEN.gray600, flexShrink:0 }}>
-          <span>9:41</span><span>● ● ●</span>
+      <div className="device-stage">
+       <div className="device">
+        <div className="device-island" />
+        <span className="device-btn device-btn--vol-up" />
+        <span className="device-btn device-btn--vol-dn" />
+        <span className="device-btn device-btn--power" />
+        <div className="ride-shell">
+        <div style={{ padding:"14px 22px 8px", display:"flex", alignItems:"center", justifyContent:"space-between", fontSize:13, fontWeight:600, color:TOKEN.black, flexShrink:0 }}>
+          <span style={{ fontVariantNumeric:"tabular-nums" }}>9:41</span>
+          <div style={{ display:"flex", alignItems:"center", gap:6 }}>
+            {/* 訊號 */}
+            <svg width="17" height="11" viewBox="0 0 17 11" fill={TOKEN.black} aria-hidden>
+              <rect x="0"  y="7.5" width="3" height="3.5" rx="0.6" />
+              <rect x="4"  y="5"   width="3" height="6"   rx="0.6" />
+              <rect x="8"  y="2.5" width="3" height="8.5" rx="0.6" />
+              <rect x="12" y="0"   width="3" height="11"  rx="0.6" />
+            </svg>
+            {/* wifi */}
+            <svg width="16" height="11" viewBox="0 0 16 12" fill="none" stroke={TOKEN.black} strokeWidth="1.6" strokeLinecap="round" aria-hidden>
+              <path d="M2 4.5C5.5 1.5 10.5 1.5 14 4.5" />
+              <path d="M4 7C6.4 5 9.6 5 12 7" />
+              <path d="M6 9.5C7.2 8.5 8.8 8.5 10 9.5" />
+            </svg>
+            {/* 電池 */}
+            <div style={{ display:"flex", alignItems:"center", gap:1.5 }}>
+              <div style={{ width:22, height:11, border:`1px solid ${TOKEN.black}`, borderRadius:3, padding:1.5, opacity:0.9 }}>
+                <div style={{ width:"78%", height:"100%", background:TOKEN.black, borderRadius:1 }} />
+              </div>
+              <div style={{ width:1.5, height:4, background:TOKEN.black, borderRadius:1, opacity:0.6 }} />
+            </div>
+          </div>
         </div>
 
         <div style={{ flex:1, display:"flex", flexDirection:"column", overflow:"hidden", minHeight:0 }}>
           {screen === "home"    && <HomeScreen onNext={handleConfirm} etaData={etaData} />}
-          {screen === "confirm" && orderData && <ConfirmScreen orderData={orderData} onBack={() => setScreen("home")} onSubmit={handleSubmit} />}
+          {screen === "confirm" && orderData && <ConfirmScreen orderData={orderData} onBack={() => setScreen("home")} onSubmit={handleSubmit} submitting={submitting} errorMsg={errorMsg} />}
           {screen === "matching"&& <MatchingScreen tripStatus={tripStatus} onCancel={handleRestart} />}
           {screen === "driver"  && <DriverScreen driverInfo={driverInfo} />}
           {screen === "trip"    && <TripScreen orderData={orderData} tripElapsed={tripElapsed} tripTotal={TRIP_TOTAL} />}
           {screen === "done"    && <DoneScreen fare={fare} onRestart={handleRestart} />}
         </div>
+
+        <div className="home-indicator" />
+        </div>
+       </div>
       </div>
     </>
   )

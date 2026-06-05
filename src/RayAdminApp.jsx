@@ -1,19 +1,6 @@
 import { useState, useEffect } from "react"
 import { api } from "./api/api"
-
-// ─── Design Tokens（與 RideApp.jsx 共用）───
-const T = {
-  black: "#0a0a0a", white: "#ffffff",
-  gray50: "#f8f8f6", gray100: "#f0efe9", gray200: "#dddcd6",
-  gray400: "#9c9a92", gray600: "#5c5b56", gray800: "#2a2a28",
-  green: "#1db954", greenLight: "#e8f5ee",
-  amber: "#f59e0b", amberLight: "#fffbeb",
-  red: "#ef4444", redLight: "#fee2e2",
-  blue: "#3b82f6", blueLight: "#dbeafe",
-  purple: "#7c3aed", purpleLight: "#ede9fe",
-  teal200: "#5DCAA5", amber200: "#EF9F27", red200: "#F09595",
-  blue200: "#85B7EB", purple200: "#AFA9EC", gray300: "#B4B2A9",
-}
+import { TOKEN as T } from "./theme"
 
 // ─── 共用 Status pill（與 RideApp.jsx 共用相同設計語言）───
 const STATUS_CONFIG = {
