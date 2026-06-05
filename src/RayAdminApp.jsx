@@ -52,27 +52,22 @@ function MetricCard({ label, value, sub, fillPct, fillColor }) {
 
 // ─── Order Row ───
 function OrderRow({ order }) {
-  const pct = order.total > 0 ? Math.round((order.elapsed / order.total) * 100) : 0
-  const statusColor = {
-    running: T.blue200, pending: T.amber200, completed: T.teal200, failed: T.red200,
-    matching: T.blue200, driver_assigned: T.teal200, on_trip: T.purple200,
-  }[order.status] || T.gray300
-
   return (
     <div style={{
-      display: "grid", gridTemplateColumns: "50px 140px 110px 130px 1fr 80px",
+      display: "grid", gridTemplateColumns: "150px 140px 140px minmax(90px,1fr)",
       alignItems: "center", gap: 8,
       background: T.white, border: `0.5px solid ${T.gray200}`,
-      borderRadius: 10, padding: "10px 14px", fontSize: 12,
+      borderRadius: 10, padding: "10px 14px", fontSize: 14,
       cursor: "pointer", transition: "border-color .15s",
     }}>
-      <span style={{ fontFamily: "monospace", fontSize: 11, color: T.gray400 }}>{order.id}</span>
+      <span
+        title={order.id}
+        style={{ fontFamily: "monospace", fontSize: 14, color: T.gray400, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
+      >
+        {order.id}
+      </span>
       <span style={{ fontWeight: 500, color: T.black }}>{order.type}</span>
       <StatusPill status={order.status} />
-      <span style={{ fontSize: 11, color: T.gray600 }}>{order.worker}</span>
-      <div style={{ height: 4, background: T.gray200, borderRadius: 2, overflow: "hidden" }}>
-        <div style={{ height: "100%", borderRadius: 2, background: statusColor, width: `${pct}%`, transition: "width 0.5s" }} />
-      </div>
       <span style={{ textAlign: "right", color: T.gray400 }}>{order.ts}</span>
     </div>
   )
@@ -153,6 +148,9 @@ function OverviewPage({ metrics, orders, setPage }) {
             <span style={{ fontSize:13, fontWeight:500, color:T.gray600 }}>Recent orders</span>
             <button onClick={() => setPage("orders")} style={{ fontSize:12, padding:"5px 12px", border:`0.5px solid ${T.gray200}`, background:T.white, borderRadius:8, cursor:"pointer", color:T.black }}>View all →</button>
           </div>
+          <div style={{ display:"grid", gridTemplateColumns:"150px 140px 140px minmax(90px,1fr)", gap:8, padding:"4px 14px", fontSize:11, color:T.gray400 }}>
+            <span>#</span><span>type</span><span>status</span><span style={{textAlign:"right"}}>time</span>
+          </div>
           <div style={{ display:"flex", flexDirection:"column", gap:6 }}>
             {orders.slice(0,3).map(o => <OrderRow key={o.id} order={o} />)}
           </div>
@@ -176,8 +174,8 @@ function OrdersPage({ orders }) {
           <button key={t} onClick={() => setFilter(t)} style={{ padding:"9px 16px", fontSize:12, cursor:"pointer", border:"none", background:"none", color: filter===t ? T.black : T.gray400, borderBottom: filter===t ? `2px solid ${T.blue}` : "2px solid transparent", fontWeight: filter===t ? 500 : 400, marginBottom:-0.5 }}>{t}</button>
         ))}
       </div>
-      <div style={{ display:"grid", gridTemplateColumns:"50px 140px 110px 130px 1fr 80px", gap:8, padding:"4px 14px", fontSize:11, color:T.gray400 }}>
-        <span>#</span><span>type</span><span>status</span><span>worker</span><span>progress</span><span style={{textAlign:"right"}}>time</span>
+      <div style={{ display:"grid", gridTemplateColumns:"150px 140px 140px minmax(90px,1fr)", gap:8, padding:"4px 14px", fontSize:11, color:T.gray400 }}>
+        <span>#</span><span>type</span><span>status</span><span style={{textAlign:"right"}}>time</span>
       </div>
       <div style={{ display:"flex", flexDirection:"column", gap:6 }}>
         {filtered.map(o => <OrderRow key={o.id} order={o} />)}
@@ -266,8 +264,23 @@ export default function RayAdminApp() {
   // ── Live updates via SSE / mock heartbeat
   useEffect(() => {
     if (!sseConnected) return
-    const unsub = api.subscribeAdminUpdates(({ orders: o, metrics: m }) => {
+    const unsub = api.subscribeAdminUpdates(({ orders: o, orderUpdate, metrics: m }) => {
       if (o) setOrders(o)
+      if (orderUpdate) {
+        setOrders(previous => {
+          const existingIndex = previous.findIndex(order => order.id === orderUpdate.id)
+          if (existingIndex === -1) return [orderUpdate, ...previous]
+          return previous.map((order, index) =>
+            index === existingIndex ? {
+              ...order,
+              ...orderUpdate,
+              type: orderUpdate.type || order.type,
+              worker: orderUpdate.worker === "—" ? order.worker : orderUpdate.worker,
+              ts: orderUpdate.ts === "—" ? order.ts : orderUpdate.ts,
+            } : order
+          )
+        })
+      }
       if (m) setMetrics(prev => ({ ...prev, ...m }))
     })
     return unsub

@@ -4,6 +4,42 @@
 const BASE = process.env.REACT_APP_API_BASE_URL || "http://localhost:8000"
 const SSE  = process.env.REACT_APP_SSE_URL      || `${BASE}/sse` // 連動PR7結論，websocked改sse做單向資料傳輸即可
 
+const ORDER_PROGRESS = {
+  pending: 0,
+  matching: 20,
+  driver_assigned: 45,
+  on_trip: 70,
+  completed: 100,
+  failed: 100,
+  cancelled: 100,
+}
+
+function formatOrderTime(timestamp) {
+  if (!timestamp) return "—"
+  return new Date(timestamp).toLocaleTimeString([], {
+    hour: "2-digit",
+    minute: "2-digit",
+  })
+}
+
+// Convert the backend OrderManager contract into the shape used by RayAdminApp.
+function mapAdminOrder(order, previous = {}) {
+  const status = order.status ?? previous.status ?? "pending"
+  return {
+    ...previous,
+    id: order.order_id ?? previous.id,
+    type: order.order_type ?? previous.type ?? "ride",
+    status,
+    worker: order.worker_node ?? previous.worker ?? "—",
+    elapsed: ORDER_PROGRESS[status] ?? previous.elapsed ?? 0,
+    total: 100,
+    ts: formatOrderTime(
+      order.updated_at ?? order.created_at ?? previous.updated_at ?? previous.created_at
+    ),
+    ...order,
+  }
+}
+
 // GET /cluster/eta
 export async function getEta() {
   const res  = await fetch(`${BASE}/cluster/eta`)
@@ -49,28 +85,36 @@ export function subscribeRideOrder(orderId, callback) {
 export async function getAdminSnapshot() {
   const [ordersRes, statusRes] = await Promise.all([
     fetch(`${BASE}/orders`),
-    fetch(`${BASE}/cluster/status`),
+    fetch(`${BASE}/cluster/status`).catch(() => null),
     // fetch(`${BASE}/cluster/scaling-history`),
   ])
-  const [orders, status] = await Promise.all([
-    ordersRes.json(),
-    statusRes.json(),
-    // historyRes.json(),
-  ])
+  const ordersData = await ordersRes.json()
+  const status = statusRes?.ok ? await statusRes.json() : null
+
   return {
-    orders:  orders,
-    workers: status.workers,
+    orders: (ordersData.orders ?? ordersData).map(order => mapAdminOrder(order)),
+    workers: status?.workers ?? [],
     // logs: history,
-    metrics: status.metrics,
+    metrics: status ? {
+      workers: status.worker_count ?? status.metrics?.workers ?? 0,
+      pending: status.pending_tasks ?? status.metrics?.pending ?? 0,
+      cpu: Math.round((status.cpu_usage?.percent ?? status.metrics?.cpu ?? 0) * (
+        status.cpu_usage?.percent != null && status.cpu_usage.percent <= 1 ? 100 : 1
+      )),
+    } : { workers: 0, pending: 0, cpu: 0 },
   }
 }
 
 // GET /sse → 監聽 heartbeat + order_updated events
-// callback receives: { orders?, metrics? }
+// callback receives: { orderUpdate?, metrics? }
 export function subscribeAdminUpdates(callback) {
   const source = new EventSource(SSE)
   source.onmessage = (e) => {
     const { event, data } = JSON.parse(e.data)
+    if (event === "order_updated") {
+      callback({ orderUpdate: mapAdminOrder(data) })
+    }
+
     // PR #7 currently sends heartbeat with empty data. Only update Overview
     // metrics after the backend provides all required cluster fields.
     if (
