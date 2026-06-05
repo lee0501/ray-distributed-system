@@ -122,16 +122,16 @@ function Sidebar({ page, setPage }) {
 }
 
 // ─── Topbar ───
-function Topbar({ title, wsConnected, onToggleWS }) {
+function Topbar({ title, sseConnected, onToggleSSE }) {
   return (
     <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"14px 24px", background:T.white, borderBottom:`0.5px solid ${T.gray200}`, flexShrink:0 }}>
       <span style={{ fontSize: 15, fontWeight: 500, color: T.black }}>{title}</span>
       <div style={{ display:"flex", alignItems:"center", gap:10 }}>
         <div style={{ display:"flex", alignItems:"center", gap:6, fontSize:12, color:T.gray600, background:T.gray100, padding:"5px 12px", borderRadius:999, border:`0.5px solid ${T.gray200}` }}>
-          <div style={{ width:7, height:7, borderRadius:"50%", background: wsConnected ? T.green : T.gray300, animation: wsConnected ? "blink 1.8s ease-in-out infinite" : "none" }}/>
-          {wsConnected ? "WebSocket connected" : "Disconnected"}
+          <div style={{ width:7, height:7, borderRadius:"50%", background: sseConnected ? T.green : T.gray300, animation: sseConnected ? "blink 1.8s ease-in-out infinite" : "none" }}/>
+          {sseConnected ? "SSE connected" : "Disconnected"}
         </div>
-        <button onClick={onToggleWS} style={{ border:`0.5px solid ${T.gray200}`, background:T.white, borderRadius:8, padding:"6px 10px", cursor:"pointer", fontSize:13, color:T.black }}>↻</button>
+        <button onClick={onToggleSSE} style={{ border:`0.5px solid ${T.gray200}`, background:T.white, borderRadius:8, padding:"6px 10px", cursor:"pointer", fontSize:13, color:T.black }}>↻</button>
       </div>
     </div>
   )
@@ -244,7 +244,7 @@ function OrdersPage({ orders }) {
 // ─── 主元件 RayAdminApp ───
 export default function RayAdminApp() {
   const [page, setPage] = useState("overview")
-  const [wsConnected, setWsConnected] = useState(true)
+  const [sseConnected, setSseConnected] = useState(true)
 
   const [orders,  setOrders]  = useState([])
   // Cluster page state remains disabled while the Cluster page is hidden.
@@ -263,15 +263,15 @@ export default function RayAdminApp() {
     })
   }, [])
 
-  // ── Live updates via WS / mock heartbeat
+  // ── Live updates via SSE / mock heartbeat
   useEffect(() => {
-    if (!wsConnected) return
+    if (!sseConnected) return
     const unsub = api.subscribeAdminUpdates(({ orders: o, metrics: m }) => {
       if (o) setOrders(o)
       if (m) setMetrics(prev => ({ ...prev, ...m }))
     })
     return unsub
-  }, [wsConnected])
+  }, [sseConnected])
 
   const pageTitle = { overview:"Overview", orders:"Orders" }
 
@@ -281,7 +281,7 @@ export default function RayAdminApp() {
       <div style={{ display:"flex", height:"100vh", fontFamily:"-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif", background:T.gray100, color:T.black }}>
         <Sidebar page={page} setPage={setPage} />
         <div style={{ flex:1, overflow:"hidden", display:"flex", flexDirection:"column" }}>
-          <Topbar title={pageTitle[page]} wsConnected={wsConnected} onToggleWS={() => setWsConnected(p => !p)} />
+          <Topbar title={pageTitle[page]} sseConnected={sseConnected} onToggleSSE={() => setSseConnected(p => !p)} />
           <div style={{ flex:1, overflowY:"auto", padding:"20px 24px" }}>
             {page === "overview" && <OverviewPage metrics={metrics} orders={orders} setPage={setPage} />}
             {page === "orders"   && <OrdersPage orders={orders} />}

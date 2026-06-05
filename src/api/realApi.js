@@ -2,7 +2,7 @@
 // Activated when REACT_APP_USE_MOCK_API=false
 //先讀環境檔看有沒有預設後端網址，沒有就用我預設的8000 
 const BASE = process.env.REACT_APP_API_BASE_URL || "http://localhost:8000"
-const WS   = process.env.REACT_APP_WS_URL       || "ws://localhost:8000/ws" //ws is for websocket
+const SSE  = process.env.REACT_APP_SSE_URL      || `${BASE}/sse` // 連動PR7結論，websocked改sse做單向資料傳輸即可
 
 // GET /cluster/eta
 export async function getEta() {
@@ -31,17 +31,17 @@ export async function createRideOrder(payload) {
   return res.json()  // { order_id, status: "pending", ... }
 }
 
-// WS /ws  →  order_updated events
+// GET /sse → order_updated events
 // callback receives: { status, trip?, result? }
 export function subscribeRideOrder(orderId, callback) {
-  const ws = new WebSocket(WS) // 建websocket的長連線去接上後端的 /ws
-  ws.onmessage = (e) => {
+  const source = new EventSource(SSE)
+  source.onmessage = (e) => {
     const { event, data } = JSON.parse(e.data)
-    if (event === "order_updated" && data.order_id === orderId) { // only process order updates also 連線is shared only process "this order"
+    if (event === "order_updated" && data.order_id === orderId) {
       callback(data)
     }
   }
-  return () => ws.close()
+  return () => source.close()
 }
 
 // Admin Overview currently uses GET /orders + GET /cluster/status.
@@ -65,13 +65,20 @@ export async function getAdminSnapshot() {
   }
 }
 
-// WS /ws  →  監聽heartbeat + cluster_updated events
+// GET /sse → 監聽 heartbeat + order_updated events
 // callback receives: { orders?, metrics? }
 export function subscribeAdminUpdates(callback) {
-  const ws = new WebSocket(WS)
-  ws.onmessage = (e) => {
+  const source = new EventSource(SSE)
+  source.onmessage = (e) => {
     const { event, data } = JSON.parse(e.data)
-    if (event === "heartbeat") {
+    // PR #7 currently sends heartbeat with empty data. Only update Overview
+    // metrics after the backend provides all required cluster fields.
+    if (
+      event === "heartbeat" &&
+      data.worker_count != null &&
+      data.pending_tasks != null &&
+      data.cpu_percent != null
+    ) {
       callback({
         metrics: {
           workers:    data.worker_count,
@@ -83,5 +90,5 @@ export function subscribeAdminUpdates(callback) {
       })
     }
   }
-  return () => ws.close()
+  return () => source.close()
 }

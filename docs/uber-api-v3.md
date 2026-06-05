@@ -1,7 +1,7 @@
-# Frontend ↔ Backend API Specification v2.1
+# Frontend ↔ Backend API Specification v2.2
 # 使用者叫車介面 + Ray 儀表板整合版
 
-> v2.1 更新：修正使用者介面的 API 範圍、補齊 on_trip / completed WS event、移除 driver_arrived 暫不實作、修正系統串接全景圖。
+> v2.2 更新：即時推送由 WebSocket 改為 SSE，前端使用 `EventSource` 連線 `GET /sse`。
 
 ---
 
@@ -13,10 +13,10 @@
      ├─ GET /cluster/eta              ├─ GET /orders
      ├─ POST /orders                  ├─ GET /cluster/status
      ├─ GET /orders/{id}              ├─ GET /cluster/scaling-history
-     └─ WS /ws                        └─ WS /ws
+     └─ GET /sse                      └─ GET /sse
           └─ order_updated                 └─ cluster_updated / heartbeat
 
-兩個前端共用同一個後端，WebSocket 同一條連線，用 event type 區分。
+兩個前端共用同一個後端 SSE endpoint，前端使用 `EventSource` 建立連線，並用 payload 內的 event type 區分事件。
 使用者介面不直接呼叫 /cluster/status，只透過 /cluster/eta 拿換算後的等待時間。
 ```
 
@@ -51,7 +51,7 @@ Response 201：
 }
 ```
 
-> 後端立即回傳 order_id，不等 Actor 執行完。前端收到後顯示「配對中」畫面，後續狀態靠 WebSocket 推送。
+> 後端立即回傳 order_id，不等 Actor 執行完。前端收到後顯示「配對中」畫面，後續狀態靠 SSE 推送。
 
 ---
 
@@ -125,9 +125,27 @@ Response 200：
 
 ---
 
-## WebSocket：Server → Client 推送格式
+## SSE：Server → Client 推送格式
 
 所有狀態變更都透過同一個 `order_updated` event 推送，前端根據 `status` 決定切換哪個畫面。
+
+前端透過以下方式建立 SSE 連線：
+
+```js
+const source = new EventSource("http://localhost:8000/sse")
+
+source.onmessage = (message) => {
+  const { event, data } = JSON.parse(message.data)
+}
+```
+
+後端 SSE response 的每一筆 `data:` 內容，仍維持既有的 `{ "event", "data" }` JSON 格式：
+
+```text
+data: {"event":"order_updated","data":{"order_id":"order-uuid-1234","status":"matching"}}
+```
+
+> 目前 order channel 已完成。Heartbeat 已接入 SSE，但後端暫時可能傳送空的 `data`；前端應在必要欄位存在時才更新 Admin metrics。
 
 ### A. pending → matching
 ```json
@@ -220,8 +238,8 @@ Response 200：
 
 | API | 用途 | 更新方式 |
 |---|---|---|
-| `GET /orders` | 所有訂單列表 | WebSocket `order_updated` |
-| `GET /cluster/status` | Worker 節點狀態、CPU、autoscaler | WebSocket `heartbeat` |
+| `GET /orders` | 所有訂單列表 | SSE `order_updated` |
+| `GET /cluster/status` | Worker 節點狀態、CPU、autoscaler | SSE `heartbeat` |
 | `GET /cluster/scaling-history` | Scaling 歷史紀錄 | 定時 poll |
 
 ---
@@ -232,12 +250,12 @@ Response 200：
 |---|---|---|---|
 | 使用者 | 叫車頁首頁 | `GET /cluster/eta` | 頁面載入時一次 |
 | 使用者 | 確認叫車 | `POST /orders` | 一次性 REST |
-| 使用者 | 配對中畫面 | `WS order_updated` (matching) | WebSocket push |
-| 使用者 | 司機前往中畫面 | `WS order_updated` (driver_assigned + trip{}) | WebSocket push |
-| 使用者 | 行程中畫面 | `WS order_updated` (on_trip) | WebSocket push |
-| 使用者 | 行程完成畫面 | `WS order_updated` (completed + result{}) | WebSocket push |
-| Admin | 訂單列表 | `GET /orders` | WebSocket push |
-| Admin | Cluster 節點狀態 | `GET /cluster/status` | WebSocket heartbeat |
+| 使用者 | 配對中畫面 | `SSE order_updated` (matching) | SSE push |
+| 使用者 | 司機前往中畫面 | `SSE order_updated` (driver_assigned + trip{}) | SSE push |
+| 使用者 | 行程中畫面 | `SSE order_updated` (on_trip) | SSE push |
+| 使用者 | 行程完成畫面 | `SSE order_updated` (completed + result{}) | SSE push |
+| Admin | 訂單列表 | `GET /orders` | SSE push |
+| Admin | Cluster 節點狀態 | `GET /cluster/status` | SSE heartbeat |
 | Admin | Scaling 歷史 | `GET /cluster/scaling-history` | 定時 poll |
 
 ---
@@ -258,4 +276,4 @@ app.add_middleware(
 
 ---
 
-*文件版本：v2.1 | 最後更新：2025-06-01*
+*文件版本：v2.2 | 最後更新：2026-06-05*
