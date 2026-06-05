@@ -57,19 +57,26 @@ const INITIAL_WORKERS = [
   { id: "ray-worker-2", role: "worker", status: "alive", cpu: 0.58 },
 ]
 
-const INITIAL_LOGS = [
-  { time: "14:20", action: "scale_up",   worker: "ray-worker-2", reason: "pending=5, polls=3" },
-  { time: "14:10", action: "scale_down", worker: "ray-worker-3", reason: "cpu=4% < 10%"       },
-  { time: "13:55", action: "scale_up",   worker: "ray-worker-2", reason: "pending=4, polls=3" },
-]
+// Scaling logs are disabled because infra does not persist scale events. 
+// const INITIAL_LOGS = [
+//   { time: "14:20", action: "scale_up",   worker: "ray-worker-2", reason: "pending=5, polls=3" },
+//   { time: "14:10", action: "scale_down", worker:"ray-worker-3", reason: "cpu=4% < 10%"       },
+//   { time: "13:55", action: "scale_up",   worker: "ray-worker-2", reason: "pending=4, polls=3" },
+// ]
 
-const INITIAL_METRICS = { workers: 2, pending: 5, cpu: 72, cooldown: 8, lastAction: "scale_up" }
+const INITIAL_METRICS = {
+  workers: 2,
+  pending: 5,
+  cpu: 72,
+  // cooldown: 8,
+  // lastAction: "scale_up",
+}
 
 export async function getAdminSnapshot() {
   return {
     orders:  INITIAL_ORDERS.map(o => ({ ...o })), //每一筆資料都做一次copy,用來避開修改的話會改到原始資料確保資料獨立
     workers: INITIAL_WORKERS.map(w => ({ ...w })),
-    logs:    INITIAL_LOGS.map(l => ({ ...l })),
+    // logs: INITIAL_LOGS.map(l => ({ ...l })),
     metrics: { ...INITIAL_METRICS },
   }
 }
@@ -91,7 +98,7 @@ export function subscribeAdminUpdates(callback) { //自己維護一份的order &
 
     metrics = {
       ...metrics,
-      cooldown: Math.max(0, metrics.cooldown - 1), //歸零
+      // cooldown: Math.max(0, metrics.cooldown - 1),
       pending:  Math.max(0, metrics.pending + (Math.random() > 0.6 ? 1 : -1)), //隨機做加減先模擬任務數量的變動來試新增、砍掉的效果
     }
 

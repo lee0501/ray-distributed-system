@@ -44,23 +44,23 @@ export function subscribeRideOrder(orderId, callback) {
   return () => ws.close()
 }
 
-//admin page 一共有三隻api 彼此之間時間不需要等待是同時的
-// GET /orders + GET /cluster/status + GET /cluster/scaling-history
+// Admin Overview currently uses GET /orders + GET /cluster/status.
+// GET /cluster/scaling-history is disabled because infra does not persist scale events.
 export async function getAdminSnapshot() {
-  const [ordersRes, statusRes, historyRes] = await Promise.all([ //Promise.all得用途是：把三個請求打包，同時發出，等三個都回來才繼續
-    fetch(`${BASE}/cluster/status`),
+  const [ordersRes, statusRes] = await Promise.all([
     fetch(`${BASE}/orders`),
-    fetch(`${BASE}/cluster/scaling-history`),
+    fetch(`${BASE}/cluster/status`),
+    // fetch(`${BASE}/cluster/scaling-history`),
   ])
-  const [orders, status, history] = await Promise.all([
+  const [orders, status] = await Promise.all([
     ordersRes.json(),
     statusRes.json(),
-    historyRes.json(),
+    // historyRes.json(),
   ])
   return {
     orders:  orders,
     workers: status.workers,
-    logs:    history,
+    // logs: history,
     metrics: status.metrics,
   }
 }
@@ -77,8 +77,8 @@ export function subscribeAdminUpdates(callback) {
           workers:    data.worker_count,
           pending:    data.pending_tasks,
           cpu:        Math.round(data.cpu_percent * 100),
-          cooldown:   0,
-          lastAction: "—",
+          // cooldown: 0,
+          // lastAction: "—",
         },
       })
     }

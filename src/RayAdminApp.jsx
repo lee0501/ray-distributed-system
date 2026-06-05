@@ -79,51 +79,11 @@ function OrderRow({ order }) {
 }
 
 // ─── Worker Card ───
-function WorkerCard({ worker }) {
-  const cpuPct = Math.round(worker.cpu * 100)
-  const barColor = worker.cpu > 0.8 ? T.red200 : worker.cpu > 0.6 ? T.amber200 : T.teal200
-  const pillMap = {
-    head:     { label: "head",     bg: T.blueLight,  color: "#1e40af" },
-    alive:    { label: "alive",    bg: T.greenLight, color: "#166534" },
-    scaling:  { label: "scaling",  bg: T.amberLight, color: "#92400e" },
-    stopping: { label: "stopping", bg: T.redLight,   color: "#991b1b" },
-  }
-  const pill = worker.role === "head" ? pillMap.head : pillMap[worker.status] || pillMap.alive
+// WorkerCard is disabled with the Cluster page because per-node CPU data is unavailable.
+// function WorkerCard({ worker }) { ... }
 
-  return (
-    <div style={{
-      background: worker.role === "head" ? T.blueLight : T.white,
-      border: `0.5px solid ${worker.role === "head" ? T.blue200 : T.gray200}`,
-      borderRadius: 10, padding: "12px 14px",
-    }}>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
-        <span style={{ fontSize: 12, fontWeight: 500, color: T.black }}>{worker.id}</span>
-        <span style={{ fontSize: 10, fontWeight: 600, padding: "2px 8px", borderRadius: 999, background: pill.bg, color: pill.color }}>{pill.label}</span>
-      </div>
-      <div style={{ fontSize: 11, color: T.gray400, marginBottom: 5 }}>CPU {cpuPct}%</div>
-      <div style={{ height: 3, background: T.gray200, borderRadius: 2, overflow: "hidden" }}>
-        <div style={{ height: "100%", borderRadius: 2, background: barColor, width: `${cpuPct}%`, transition: "width 0.5s" }} />
-      </div>
-    </div>
-  )
-}
-
-// ─── Scale Log Row ───
-function LogRow({ log }) {
-  const isUp = log.action === "scale_up"
-  return (
-    <div style={{
-      display: "flex", alignItems: "center", gap: 8,
-      fontSize: 11, padding: "6px 12px", borderRadius: 10,
-      background: T.white, border: `0.5px solid ${T.gray200}`,
-    }}>
-      <span style={{ color: T.gray400, minWidth: 38, fontFamily: "monospace" }}>{log.time}</span>
-      <span style={{ color: isUp ? "#1e40af" : "#993C1D", fontSize: 13 }}>{isUp ? "↑" : "↓"}</span>
-      <span style={{ color: T.gray600, flex: 1 }}>{log.action} → {log.worker}</span>
-      <span style={{ color: T.gray400, fontSize: 10 }}>{log.reason}</span>
-    </div>
-  )
-}
+// Scale Log Row is hidden because infra does not persist scale events.
+// function LogRow({ log }) { ... }
 
 // ─── Sidebar Nav ───
 function Sidebar({ page, setPage }) {
@@ -131,9 +91,10 @@ function Sidebar({ page, setPage }) {
     { key: "overview", label: "Overview",      icon: "⊞" },
     { key: "orders",   label: "Orders",        icon: "☰" },
   ]
-  const infraItems = [
-    { key: "cluster",  label: "Cluster nodes", icon: "◫" },
-  ]
+  // Cluster navigation is disabled until reliable cluster detail APIs exist.
+  // const infraItems = [
+  //   { key: "cluster",  label: "Cluster nodes", icon: "◫" },
+  // ]
   const navBtn = (n) => (
     <button key={n.key} onClick={() => setPage(n.key)}
       style={{ display:"flex", alignItems:"center", gap:9, padding:"8px 18px", fontSize:13, cursor:"pointer", border:"none", background: page===n.key ? T.gray100 : "none", width:"100%", textAlign:"left", color: page===n.key ? T.black : T.gray600, fontWeight: page===n.key ? 500 : 400, transition:"background .12s" }}>
@@ -149,8 +110,9 @@ function Sidebar({ page, setPage }) {
       <div style={{ padding: "10px 0", flex: 1 }}>
         <div style={{ fontSize: 10, color: T.gray400, padding: "4px 18px", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 2 }}>Main</div>
         {mainItems.map(navBtn)}
-        <div style={{ fontSize: 10, color: T.gray400, padding: "12px 18px 4px", textTransform: "uppercase", letterSpacing: "0.06em" }}>Infrastructure</div>
-        {infraItems.map(navBtn)}
+        {/* Infrastructure navigation disabled with the Cluster page. */}
+        {/* <div style={{ fontSize: 10, color: T.gray400, padding: "12px 18px 4px", textTransform: "uppercase", letterSpacing: "0.06em" }}>Infrastructure</div>
+        {infraItems.map(navBtn)} */}
       </div>
       <div style={{ padding: "12px 18px", borderTop: `0.5px solid ${T.gray200}`, fontSize: 11, color: T.gray400 }}>
         Ray local autoscaler v0.1
@@ -176,16 +138,16 @@ function Topbar({ title, wsConnected, onToggleWS }) {
 }
 
 // ─── Page: Overview ───
-function OverviewPage({ metrics, orders, logs, setPage }) {
+function OverviewPage({ metrics, orders, setPage }) {
   return (
     <div style={{ display:"flex", flexDirection:"column", gap:16 }}>
-      <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:12 }}>
+      <div style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:12 }}>
         <MetricCard label="Workers alive"  value={metrics.workers}  sub="max 5 nodes"  fillPct={metrics.workers/5*100}   fillColor={T.blue200}   />
         <MetricCard label="Pending resource demands"  value={metrics.pending}  sub="in queue"     fillPct={metrics.pending/10*100}  fillColor={T.amber200}  />
         <MetricCard label="CPU usage"      value={`${metrics.cpu}%`} sub={`${(metrics.cpu/100*2).toFixed(2)} / 2.0 cores`} fillPct={metrics.cpu} fillColor={T.teal200} />
-        <MetricCard label="Cooldown"       value={`${metrics.cooldown}s`} sub={`last: ${metrics.lastAction}`} fillPct={metrics.cooldown/15*100} fillColor={T.purple200} />
+        {/* <MetricCard label="Cooldown"       value={`${metrics.cooldown}s`} sub={`last: ${metrics.lastAction}`} fillPct={metrics.cooldown/15*100} fillColor={T.purple200} /> */}
       </div>
-      <div style={{ display:"grid", gridTemplateColumns:"1fr 260px", gap:16 }}>
+      <div style={{ display:"grid", gridTemplateColumns:"1fr", gap:16 }}>
         <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
           <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between" }}>
             <span style={{ fontSize:13, fontWeight:500, color:T.gray600 }}>Recent orders</span>
@@ -195,12 +157,7 @@ function OverviewPage({ metrics, orders, logs, setPage }) {
             {orders.slice(0,3).map(o => <OrderRow key={o.id} order={o} />)}
           </div>
         </div>
-        <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
-          <span style={{ fontSize:13, fontWeight:500, color:T.gray600 }}>Scaling log</span>
-          <div style={{ display:"flex", flexDirection:"column", gap:5 }}>
-            {logs.slice(0,4).map((l,i) => <LogRow key={i} log={l} />)}
-          </div>
-        </div>
+        {/* Scaling log is hidden because infra does not persist scale events. */}
       </div>
     </div>
   )
@@ -230,57 +187,57 @@ function OrdersPage({ orders }) {
 }
 
 // ─── Page: Cluster ───
-function ClusterPage({ workers, logs }) {
-  const alive = workers.filter(w => w.status !== "stopping").length
-  const policyItems = [
-    ["min_workers","0","minimum alive"],
-    ["max_workers","5","maximum alive"],
-    ["cooldown","15s","between actions"],
-    ["scale_up_threshold","3 polls","consecutive checks"],
-    ["cpu_scale_down","< 10%","CPU threshold"],
-    ["poll_interval","5s","monitor frequency"],
-  ]
-  return (
-    <div style={{ display:"flex", flexDirection:"column", gap:16 }}>
-      <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
-        <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between" }}>
-          <span style={{ fontSize:13, fontWeight:500, color:T.gray600 }}>
-            Nodes <span style={{ color:T.gray400, fontWeight:400 }}>({alive} alive)</span>
-          </span>
-          <span style={{ fontSize:11, color:T.gray400, background:T.gray100, padding:"4px 10px", borderRadius:999 }}>
-            Auto-managed by Autoscaler
-          </span>
-        </div>
-        <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:10 }}>
-          {workers.map(w => <WorkerCard key={w.id} worker={w} />)}
-        </div>
-      </div>
+// function ClusterPage({ workers, logs }) {
+//   const alive = workers.filter(w => w.status !== "stopping").length
+//   const policyItems = [
+//     ["min_workers","0","minimum alive"],
+//     ["max_workers","5","maximum alive"],
+//     ["cooldown","15s","between actions"],
+//     ["scale_up_threshold","3 polls","consecutive checks"],
+//     ["cpu_scale_down","< 10%","CPU threshold"],
+//     ["poll_interval","5s","monitor frequency"],
+//   ]
+//   return (
+//     <div style={{ display:"flex", flexDirection:"column", gap:16 }}>
+//       <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
+//         <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between" }}>
+//           <span style={{ fontSize:13, fontWeight:500, color:T.gray600 }}>
+//             Nodes <span style={{ color:T.gray400, fontWeight:400 }}>({alive} alive)</span>
+//           </span>
+//           <span style={{ fontSize:11, color:T.gray400, background:T.gray100, padding:"4px 10px", borderRadius:999 }}>
+//             Auto-managed by Autoscaler
+//           </span>
+//         </div>
+//         <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:10 }}>
+//           {workers.map(w => <WorkerCard key={w.id} worker={w} />)}
+//         </div>
+//       </div>
 
-      <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
-        <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between" }}>
-          <span style={{ fontSize:13, fontWeight:500, color:T.gray600 }}>Scale policy</span>
-          <button style={{ fontSize:12, padding:"5px 12px", border:`0.5px solid ${T.gray200}`, background:T.white, borderRadius:8, cursor:"pointer", color:T.black }}>scale_policy.yaml</button>
-        </div>
-        <div style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:8 }}>
-          {policyItems.map(([k,v,d]) => (
-            <div key={k} style={{ background:T.white, border:`0.5px solid ${T.gray200}`, borderRadius:10, padding:14 }}>
-              <div style={{ fontSize:11, color:T.gray400, marginBottom:4 }}>{k}</div>
-              <div style={{ fontSize:18, fontWeight:500, color:T.black }}>{v}</div>
-              <div style={{ fontSize:11, color:T.gray400, marginTop:3 }}>{d}</div>
-            </div>
-          ))}
-        </div>
-      </div>
+//       <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
+//         <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between" }}>
+//           <span style={{ fontSize:13, fontWeight:500, color:T.gray600 }}>Scale policy</span>
+//           <button style={{ fontSize:12, padding:"5px 12px", border:`0.5px solid ${T.gray200}`, background:T.white, borderRadius:8, cursor:"pointer", color:T.black }}>scale_policy.yaml</button>
+//         </div>
+//         <div style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:8 }}>
+//           {policyItems.map(([k,v,d]) => (
+//             <div key={k} style={{ background:T.white, border:`0.5px solid ${T.gray200}`, borderRadius:10, padding:14 }}>
+//               <div style={{ fontSize:11, color:T.gray400, marginBottom:4 }}>{k}</div>
+//               <div style={{ fontSize:18, fontWeight:500, color:T.black }}>{v}</div>
+//               <div style={{ fontSize:11, color:T.gray400, marginTop:3 }}>{d}</div>
+//             </div>
+//           ))}
+//         </div>
+//       </div>
 
-      <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
-        <span style={{ fontSize:13, fontWeight:500, color:T.gray600 }}>Scaling history</span>
-        <div style={{ display:"flex", flexDirection:"column", gap:5 }}>
-          {logs.map((l,i) => <LogRow key={i} log={l} />)}
-        </div>
-      </div>
-    </div>
-  )
-}
+//       <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
+//         <span style={{ fontSize:13, fontWeight:500, color:T.gray600 }}>Scaling history</span>
+//         <div style={{ display:"flex", flexDirection:"column", gap:5 }}>
+//           {logs.map((l,i) => <LogRow key={i} log={l} />)}
+//         </div>
+//       </div>
+//     </div>
+//   )
+// }
 
 
 
@@ -290,16 +247,18 @@ export default function RayAdminApp() {
   const [wsConnected, setWsConnected] = useState(true)
 
   const [orders,  setOrders]  = useState([])
-  const [workers, setWorkers] = useState([])
-  const [logs,    setLogs]    = useState([])
+  // Cluster page state remains disabled while the Cluster page is hidden.
+  // const [workers, setWorkers] = useState([])
+  // Scaling log state is hidden with the Overview scaling log.
+  // const [logs,    setLogs]    = useState([])
   const [metrics, setMetrics] = useState({ workers: 0, pending: 0, cpu: 0, cooldown: 0, lastAction: "—" })
 
   // ── Initial data load
   useEffect(() => {
-    api.getAdminSnapshot().then(({ orders, workers, logs, metrics }) => {
+    api.getAdminSnapshot().then(({ orders, metrics }) => {
       setOrders(orders)
-      setWorkers(workers)
-      setLogs(logs)
+      // setWorkers(workers)
+      // setLogs(logs)
       setMetrics(metrics)
     })
   }, [])
@@ -314,7 +273,7 @@ export default function RayAdminApp() {
     return unsub
   }, [wsConnected])
 
-  const pageTitle = { overview:"Overview", orders:"Orders", cluster:"Cluster nodes" }
+  const pageTitle = { overview:"Overview", orders:"Orders" }
 
   return (
     <>
@@ -324,9 +283,10 @@ export default function RayAdminApp() {
         <div style={{ flex:1, overflow:"hidden", display:"flex", flexDirection:"column" }}>
           <Topbar title={pageTitle[page]} wsConnected={wsConnected} onToggleWS={() => setWsConnected(p => !p)} />
           <div style={{ flex:1, overflowY:"auto", padding:"20px 24px" }}>
-            {page === "overview" && <OverviewPage metrics={metrics} orders={orders} logs={logs} setPage={setPage} />}
+            {page === "overview" && <OverviewPage metrics={metrics} orders={orders} setPage={setPage} />}
             {page === "orders"   && <OrdersPage orders={orders} />}
-            {page === "cluster"  && <ClusterPage workers={workers} logs={logs} />}
+            {/* Cluster page disabled because its backing APIs are unavailable. */}
+            {/* {page === "cluster" && <ClusterPage workers={workers} logs={logs} />} */}
           </div>
         </div>
       </div>
