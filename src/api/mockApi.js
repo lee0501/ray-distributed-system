@@ -2,11 +2,6 @@
 
 const mockOrderRegistry = {} //這裡用來記訂單的資料 key會是訂單的ID value會是訂單的內容（因為後面我設計有不同function都需要用到訂單的資料資訊）
 
-export async function getEta() { //這個用來做叫車頁面「尖峰時段或是其他狀態的設定」這樣比較跟真實的很像
-  const waitMin = Math.max(1, Math.round(Math.random() * 3 + 1))
-  return { waitMin, surge: waitMin > 4 }
-} 
-
 export async function createRideOrder(payload) { //這裡資料從訂單頁傳進來（包含上下車地點、車型選擇、價格）
   const orderId = "mock-" + Date.now() // 產訂單ID(這個是唯一)
   mockOrderRegistry[orderId] = { price: payload.price || 260 } //這個價錢我在使用者端的前端檔案有寫兩個車種的預設價格（寫死因為只是模擬就不討論動態定價）

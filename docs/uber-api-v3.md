@@ -10,14 +10,13 @@
 ```
 [使用者介面]                    [Ray Admin 儀表板]
      │                                │
-     ├─ GET /cluster/eta              ├─ GET /orders
-     ├─ POST /orders                  ├─ GET /cluster/status
-     ├─ GET /orders/{id}              ├─ GET /cluster/scaling-history
+     ├─ POST /orders                  ├─ GET /orders
+     ├─ GET /orders/{id}              ├─ GET /cluster/status
      └─ GET /sse                      └─ GET /sse
           └─ order_updated                 └─ cluster_updated / heartbeat
 
 兩個前端共用同一個後端 SSE endpoint，前端使用 `EventSource` 建立連線，並用 payload 內的 event type 區分事件。
-使用者介面不直接呼叫 /cluster/status，只透過 /cluster/eta 拿換算後的等待時間。
+使用者介面不直接呼叫 `/cluster/status`，也不顯示由 cluster 狀態推估的等待時間。
 ```
 
 ---
@@ -82,30 +81,6 @@ Response 200：
   }
 }
 ```
-
----
-
-### GET /cluster/eta（預估等待時間，使用者介面專用）
-
-> 只在叫車頁首頁載入時呼叫一次，用來顯示右上角「約 N 分鐘」badge。
-> 配對中、行程中畫面不使用此 API，也不顯示任何 Ray 內部狀態。
-
-```
-GET /cluster/eta
-```
-
-Response 200：
-```json
-{
-  "pending_tasks": 5,
-  "worker_count": 2,
-  "estimated_wait_seconds": 90,
-  "surge": false
-}
-```
-
-> 後端換算邏輯：`estimated_wait_seconds = pending_tasks / worker_count * 平均行程秒數`
-> surge = true 時前端 badge 顯示「⚡ 尖峰時段」
 
 ---
 
@@ -234,13 +209,15 @@ data: {"event":"order_updated","data":{"order_id":"order-uuid-1234","status":"ma
 
 ---
 
-## Admin 儀表板 API（維持不變）
+## Admin 儀表板 API
 
 | API | 用途 | 更新方式 |
 |---|---|---|
 | `GET /orders` | 所有訂單列表 | SSE `order_updated` |
 | `GET /cluster/status` | Worker 節點狀態、CPU、autoscaler | SSE `heartbeat` |
-| `GET /cluster/scaling-history` | Scaling 歷史紀錄 | 定時 poll |
+
+> Infra 目前不會持久化 scale up/down events，因此前端停用 Scaling history，
+> 也不呼叫 `GET /cluster/scaling-history`。
 
 ---
 
@@ -248,7 +225,6 @@ data: {"event":"order_updated","data":{"order_id":"order-uuid-1234","status":"ma
 
 | 介面 | 頁面/區塊 | API | 更新方式 |
 |---|---|---|---|
-| 使用者 | 叫車頁首頁 | `GET /cluster/eta` | 頁面載入時一次 |
 | 使用者 | 確認叫車 | `POST /orders` | 一次性 REST |
 | 使用者 | 配對中畫面 | `SSE order_updated` (matching) | SSE push |
 | 使用者 | 司機前往中畫面 | `SSE order_updated` (driver_assigned + trip{}) | SSE push |
@@ -256,7 +232,6 @@ data: {"event":"order_updated","data":{"order_id":"order-uuid-1234","status":"ma
 | 使用者 | 行程完成畫面 | `SSE order_updated` (completed + result{}) | SSE push |
 | Admin | 訂單列表 | `GET /orders` | SSE push |
 | Admin | Cluster 節點狀態 | `GET /cluster/status` | SSE heartbeat |
-| Admin | Scaling 歷史 | `GET /cluster/scaling-history` | 定時 poll |
 
 ---
 

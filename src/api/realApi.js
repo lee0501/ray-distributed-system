@@ -40,16 +40,6 @@ function mapAdminOrder(order, previous = {}) {
   }
 }
 
-// GET /cluster/eta
-export async function getEta() {
-  const res  = await fetch(`${BASE}/cluster/eta`)
-  const data = await res.json()
-  return {
-    waitMin: Math.ceil(data.estimated_wait_seconds / 60), // 時間表線上直接對齊單位：分鐘 整體回傳格式要跟mock格式一致
-    surge:   data.surge,
-  }
-}
-
 // POST /orders
 export async function createRideOrder(payload) {
   const res = await fetch(`${BASE}/orders`, {

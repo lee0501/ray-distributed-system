@@ -7,9 +7,9 @@ The project demonstrates how a ride order can move through a distributed system:
 ## What This Project Does
 
 - Provides a rider UI for creating and tracking ride orders.
-- Provides an admin UI for monitoring orders, workers, cluster metrics, and scaling events.
+- Provides an admin UI for monitoring orders and cluster summary metrics.
 - Supports mock data for frontend-only demos and real backend APIs for integration.
-- Uses WebSocket updates for live order and cluster status changes.
+- Uses SSE updates for live order and cluster status changes.
 
 ## Screens
 
@@ -21,7 +21,6 @@ The project demonstrates how a ride order can move through a distributed system:
 The rider app simulates a user-facing Uber-like flow:
 
 - Enter pickup and destination locations.
-- View estimated wait time and surge status.
 - Choose a ride type.
 - Create a ride order.
 - Track the order through statuses such as pending, matching, driver assigned, on trip, and completed.
@@ -31,10 +30,10 @@ The rider app simulates a user-facing Uber-like flow:
 The admin dashboard is used to observe the distributed system:
 
 - Recent and active orders.
-- Worker node status.
-- CPU usage and pending task demand.
-- Autoscaling cooldown state.
-- Scaling history and cluster activity.
+- Alive worker count, CPU usage, and pending resource demand.
+
+Scaling history is currently disabled because the infra layer does not persist
+scale up/down events. The frontend does not call `GET /cluster/scaling-history`.
 
 ## API Modes
 
@@ -43,14 +42,9 @@ The frontend can run in two modes:
 | Mode | Purpose | Source |
 | --- | --- | --- |
 | Mock API | Run and demo the UI without a backend | `src/api/mockApi.js` |
-| Real API | Connect to the backend API and WebSocket server | `src/api/realApi.js` |
+| Real API | Connect to the backend API and SSE server | `src/api/realApi.js` |
 
 The selected mode is controlled by `REACT_APP_USE_MOCK_API`.
-
-```text
-.env.development  REACT_APP_USE_MOCK_API=true
-.env.production   REACT_APP_USE_MOCK_API=false
-```
 
 ## Backend Connection
 
@@ -58,7 +52,7 @@ When using the real API mode, the frontend connects to:
 
 ```text
 REACT_APP_API_BASE_URL=http://localhost:8000
-REACT_APP_WS_URL=ws://localhost:8000/ws
+REACT_APP_SSE_URL=http://localhost:8000/sse
 ```
 
 The backend API contract is documented in:
@@ -69,12 +63,10 @@ docs/uber-api-v3.md
 
 Main backend endpoints used by the app:
 
-- `GET /cluster/eta` - estimated wait time and surge status.
 - `POST /orders` - create a ride order.
 - `GET /orders` - fetch orders for the admin dashboard.
 - `GET /cluster/status` - fetch worker and cluster metrics.
-- `GET /cluster/scaling-history` - fetch scaling events.
-- `WS /ws` - receive live order and cluster updates.
+- `GET /sse` - receive live order and cluster updates.
 
 ## Project Structure
 
@@ -112,11 +104,31 @@ npm install
 
 ## Development
 
-Start the local development server:
+Development mode uses frontend mock data by default. After cloning the project,
+run:
 
 ```bash
+npm install
 npm start
 ```
+
+To connect to the real backend instead, run:
+
+```bash
+printf 'REACT_APP_USE_MOCK_API=false\n' > .env.development
+npm install
+npm start
+```
+
+To switch back to frontend mock data, run:
+
+```bash
+printf 'REACT_APP_USE_MOCK_API=true\n' > .env.development
+npm start
+```
+
+Restart `npm start` whenever the API mode changes. Backend URLs remain
+configurable through `REACT_APP_API_BASE_URL` and `REACT_APP_SSE_URL`.
 
 Open:
 
@@ -124,8 +136,6 @@ Open:
 http://localhost:3000
 http://localhost:3000/admin
 ```
-
-Development mode uses mock API data by default, so the frontend can be run without starting the backend.
 
 ## Production Build
 
@@ -139,7 +149,7 @@ Production output is generated in:
 build/
 ```
 
-Production mode uses the real API implementation unless `REACT_APP_USE_MOCK_API=true` is explicitly set.
+Production mode uses the value configured in `.env.production`.
 
 ## Available Scripts
 
