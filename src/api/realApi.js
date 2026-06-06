@@ -133,7 +133,7 @@ export function subscribeRideOrder(orderId, callback) {
 // Admin pages load orders, cluster status, and scaling history in parallel.
 export async function getAdminSnapshot() {
   const [ordersRes, statusRes, historyRes] = await Promise.all([
-    fetch(`${BASE}/orders`),
+    fetch(`${BASE}/orders?limit=500`),
     fetch(`${BASE}/cluster/status`),
     fetch(`${BASE}/cluster/scaling-history`),
   ])

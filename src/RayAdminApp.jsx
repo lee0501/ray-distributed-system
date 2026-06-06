@@ -6,12 +6,23 @@ import { TOKEN as T } from "./theme"
 const STATUS_CONFIG = {
   pending:         { label: "pending",         bg: T.amberLight,  color: "#ba9482" },
   matching:        { label: "matching",         bg: T.blueLight,   color: "#1e40af" },
-  driver_assigned: { label: "driver_assigned",  bg: T.greenLight,  color: "#f6f600" },
+  driver_assigned: { label: "driver_assigned",  bg: T.orangeLight,  color: "#9c5b1a" },
   on_trip:         { label: "on_trip",          bg: T.purpleLight, color: "#5b21b6" },
   running:         { label: "running",          bg: T.blueLight,   color: "#60c9e9" },
   completed:       { label: "completed",        bg: T.greenLight,  color: "#166534" },
   failed:          { label: "failed",           bg: T.redLight,    color: "#cf2b2b" },
   cancelled:       { label: "cancelled",        bg: T.gray100,     color: "#626262" },
+}
+
+const STATUS_PROGRESS = {
+  pending: 0,
+  matching: 1,
+  driver_assigned: 2,
+  running: 3,
+  on_trip: 3,
+  completed: 4,
+  failed: 4,
+  cancelled: 4,
 }
 
 function StatusPill({ status }) {
@@ -21,6 +32,32 @@ function StatusPill({ status }) {
       {c.label}
     </span>
   )
+}
+
+function mergeOrders(previous, incoming) {
+  const merged = new Map(previous.map(order => [order.id, order]))
+  const incomingIds = new Set(incoming.map(order => order.id))
+
+  incoming.forEach(order => {
+    const existing = merged.get(order.id)
+    const status = existing &&
+      STATUS_PROGRESS[existing.status] > STATUS_PROGRESS[order.status]
+      ? existing.status
+      : order.status
+    merged.set(order.id, existing ? {
+      ...existing,
+      ...order,
+      status,
+      type: order.type || existing.type,
+      worker: order.worker === "—" ? existing.worker : order.worker,
+      ts: order.ts === "—" ? existing.ts : order.ts,
+    } : order)
+  })
+
+  return [
+    ...incoming.map(order => merged.get(order.id)),
+    ...previous.filter(order => !incomingIds.has(order.id)),
+  ]
 }
 
 // ─── Metric Card ───
@@ -198,7 +235,7 @@ function OverviewPage({ metrics, orders, logs, setPage }) {
 // ─── Page: Orders ───
 function OrdersPage({ orders }) {
   const [filter, setFilter] = useState("all")
-  const tabs = ["all","pending","running","completed","cancelled","failed"]
+  const tabs = ["all","pending","matching","driver_assigned","on_trip","completed","cancelled","failed"]
   const filtered = filter === "all" ? orders : orders.filter(o => o.status === filter)
 
   return (
@@ -288,7 +325,7 @@ export default function RayAdminApp() {
   // ── Initial data load and cluster polling
   useEffect(() => {
     const refreshSnapshot = () => api.getAdminSnapshot().then(({ orders, workers, logs, metrics }) => {
-      setOrders(orders)
+      setOrders(previous => mergeOrders(previous, orders))
       setWorkers(workers)
       setLogs(logs)
       setMetrics(metrics)
@@ -302,21 +339,9 @@ export default function RayAdminApp() {
   useEffect(() => {
     if (!sseConnected) return
     const unsub = api.subscribeAdminUpdates(({ orders: o, orderUpdate, scalingEvent, metrics: m }) => {
-      if (o) setOrders(o)
+      if (o) setOrders(previous => mergeOrders(previous, o))
       if (orderUpdate) {
-        setOrders(previous => {
-          const existingIndex = previous.findIndex(order => order.id === orderUpdate.id)
-          if (existingIndex === -1) return [orderUpdate, ...previous]
-          return previous.map((order, index) =>
-            index === existingIndex ? {
-              ...order,
-              ...orderUpdate,
-              type: orderUpdate.type || order.type,
-              worker: orderUpdate.worker === "—" ? order.worker : orderUpdate.worker,
-              ts: orderUpdate.ts === "—" ? order.ts : orderUpdate.ts,
-            } : order
-          )
-        })
+        setOrders(previous => mergeOrders(previous, [orderUpdate]))
       }
       if (scalingEvent) setLogs(previous => [scalingEvent, ...previous])
       if (m) setMetrics(prev => ({ ...prev, ...m }))
