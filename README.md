@@ -21,6 +21,7 @@ The project demonstrates how a ride order can move through a distributed system:
 The rider app simulates a user-facing Uber-like flow:
 
 - Enter pickup and destination locations.
+- View the current estimated wait time and surge status.
 - Choose a ride type.
 - Create a ride order.
 - Track the order through statuses such as pending, matching, driver assigned, on trip, and completed.
@@ -30,10 +31,8 @@ The rider app simulates a user-facing Uber-like flow:
 The admin dashboard is used to observe the distributed system:
 
 - Recent and active orders.
-- Alive worker count, CPU usage, and pending resource demand.
-
-Scaling history is currently disabled because the infra layer does not persist
-scale up/down events. The frontend does not call `GET /cluster/scaling-history`.
+- Alive worker count, per-node and total CPU usage, and pending resource demand.
+- Autoscaler cooldown, last action, and scaling history.
 
 ## API Modes
 
@@ -65,14 +64,32 @@ Main backend endpoints used by the app:
 
 - `POST /orders` - create a ride order.
 - `GET /orders` - fetch orders for the admin dashboard.
+- `GET /cluster/eta` - fetch the estimated rider wait time.
 - `GET /cluster/status` - fetch worker and cluster metrics.
+- `GET /cluster/scaling-history` - fetch recent scale up/down events.
 - `GET /sse` - receive live order and cluster updates.
+
+Cluster ETA, status, cooldown, scaling history, and SSE heartbeat are aligned
+with backend PR #9.
+
+### Pending Order Cancellation Integration
+
+The matching screen currently has a cancel button, but it only resets the
+frontend state. The backend Order Actor continues running because the
+cancellation endpoint is not implemented yet.
+
+The required contract is documented in `docs/uber-api-v3.md`:
+
+- `POST /orders/{order_id}/cancel` - cancel an order in `pending` or `matching`.
+- Stop the corresponding Ray Order Actor and update its status to `cancelled`.
+- Push the resulting `cancelled` status through SSE.
 
 ## Project Structure
 
 ```text
 Ray-app/
 ├── docs/
+│   ├── order-cancellation-integration.md
 │   └── uber-api-v3.md
 ├── public/
 ├── src/

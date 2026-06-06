@@ -1,7 +1,9 @@
-# Frontend ↔ Backend API Specification v2.2
+# Frontend ↔ Backend API Specification v2.4
 # 使用者叫車介面 + Ray 儀表板整合版
 
 > v2.2 更新：即時推送由 WebSocket 改為 SSE，前端使用 `EventSource` 連線 `GET /sse`。
+> v2.3 更新：依後端 PR #9 恢復 cluster ETA、status、cooldown 與 scaling history。
+> v2.4 更新：新增取消訂單 API 訴求與 `cancelled` SSE 契約。
 
 ---
 
@@ -10,13 +12,15 @@
 ```
 [使用者介面]                    [Ray Admin 儀表板]
      │                                │
-     ├─ POST /orders                  ├─ GET /orders
-     ├─ GET /orders/{id}              ├─ GET /cluster/status
+     ├─ GET /cluster/eta              ├─ GET /orders
+     ├─ POST /orders                  ├─ GET /cluster/status
+     ├─ GET /orders/{id}              ├─ GET /cluster/scaling-history
+     ├─ POST /orders/{id}/cancel
      └─ GET /sse                      └─ GET /sse
           └─ order_updated                 └─ cluster_updated / heartbeat
 
 兩個前端共用同一個後端 SSE endpoint，前端使用 `EventSource` 建立連線，並用 payload 內的 event type 區分事件。
-使用者介面不直接呼叫 `/cluster/status`，也不顯示由 cluster 狀態推估的等待時間。
+使用者介面不直接呼叫 `/cluster/status`，只透過 `/cluster/eta` 取得後端換算後的等待時間。
 ```
 
 ---
@@ -84,6 +88,80 @@ Response 200：
 
 ---
 
+### POST /orders/{order_id}/cancel（取消訂單，待後端實作）
+
+取消仍在執行中的訂單。此 API 是前後端下一階段的整合訴求，目前尚未實作完成。
+
+此請求不需要 request body。後端只允許取消 `pending` 或 `matching` 訂單，並拒絕取消
+`driver_assigned`、`on_trip`、`completed`、`failed` 或 `cancelled` 訂單。
+
+Response 200：
+
+```json
+{
+  "order_id": "order-uuid-1234",
+  "status": "cancelled"
+}
+```
+
+Response 404：
+
+```json
+{
+  "error": "order not found"
+}
+```
+
+Response 409：
+
+```json
+{
+  "error": "order cannot be cancelled from status: on_trip"
+}
+```
+
+取消成功時，後端必須在同一次操作中：
+
+1. 使用 `ray.kill` 停止對應的 Ray Order Actor。
+2. 從 `actor_handles` 移除對應的 Actor handle。
+3. 將 OrderManager 內的訂單狀態更新為 `cancelled` 並記錄更新時間。
+4. 推送 `order_updated` SSE 事件。
+
+若只更新訂單狀態但未停止 Actor，Actor 仍可能繼續執行並將狀態覆蓋為後續狀態。
+
+前端完成此 API 後需要：
+
+1. 保存 `POST /orders` 回傳的目前訂單 ID。
+2. 在 real API 與 mock API 實作 `cancelRideOrder(orderId)`。
+3. 配對頁面的取消按鈕改為呼叫取消 API，並在請求期間停用按鈕。
+4. 收到成功 response 或 SSE `cancelled` 後，關閉訂單 SSE、清除訂單 ID 並返回首頁。
+5. 取消失敗時保留在配對頁面並顯示錯誤。
+
+Mock API 取消訂單時也必須清除該訂單所有尚未執行的 `setTimeout`，避免取消後繼續切換狀態。
+
+確認頁面的「返回修改」不呼叫取消 API，因為此時尚未呼叫 `POST /orders`，後端不存在對應訂單。
+
+---
+
+### GET /cluster/eta（預估等待時間）
+
+叫車首頁定時取得目前預估等待時間。
+
+Response 200：
+
+```json
+{
+  "pending_tasks": 0,
+  "worker_count": 1,
+  "estimated_wait_seconds": 0,
+  "surge": false
+}
+```
+
+前端將 `estimated_wait_seconds` 向上換算成分鐘後顯示。
+
+---
+
 ## 叫車狀態表
 
 | Status | 對應 Ray Actor 狀態 | 使用者看到的文字 | 前端畫面 |
@@ -94,7 +172,7 @@ Response 200：
 | `on_trip` | Actor 追蹤行程中 | 行程中 | 行程中畫面（進度條）|
 | `completed` | Actor 執行完成 | 行程完成 | 行程完成畫面 |
 | `failed` | Actor 失敗 | 叫車失敗 | 錯誤提示 |
-| `cancelled` | Actor 被中止 | 已取消 | 返回首頁 |
+| `cancelled` | 使用者取消，Actor 被中止 | 已取消 | 返回首頁 |
 
 > `driver_arrived`（司機已抵達）需要 GPS 偵測，**暫不實作**，demo 階段跳過此狀態。
 
@@ -120,7 +198,8 @@ source.onmessage = (message) => {
 data: {"event":"order_updated","data":{"order_id":"order-uuid-1234","status":"matching"}}
 ```
 
-> 目前 order channel 已完成。Heartbeat 已接入 SSE，但後端暫時可能傳送空的 `data`；前端應在必要欄位存在時才更新 Admin metrics。
+目前 order channel 與 cluster channel 已完成。Heartbeat 的 `data` 包含
+`pending_tasks`、`worker_count` 與 `cpu_percent`；前端只在必要欄位存在時更新 Admin metrics。
 
 ### A. pending → matching
 ```json
@@ -181,7 +260,19 @@ data: {"event":"order_updated","data":{"order_id":"order-uuid-1234","status":"ma
 }
 ```
 
-### E. Cluster 狀態變更（Admin 儀表板用）
+### E. cancelled（取消成功）
+```json
+{
+  "event": "order_updated",
+  "data": {
+    "order_id": "order-uuid-1234",
+    "status": "cancelled",
+    "updated_at": "2026-06-05T14:23:10Z"
+  }
+}
+```
+
+### F. Cluster 狀態變更（Admin 儀表板用）
 ```json
 {
   "event": "cluster_updated",
@@ -195,7 +286,7 @@ data: {"event":"order_updated","data":{"order_id":"order-uuid-1234","status":"ma
 }
 ```
 
-### F. Heartbeat（每 5 秒，Admin 儀表板用）
+### G. Heartbeat（每 5 秒，Admin 儀表板用）
 ```json
 {
   "event": "heartbeat",
@@ -215,9 +306,34 @@ data: {"event":"order_updated","data":{"order_id":"order-uuid-1234","status":"ma
 |---|---|---|
 | `GET /orders` | 所有訂單列表 | SSE `order_updated` |
 | `GET /cluster/status` | Worker 節點狀態、CPU、autoscaler | SSE `heartbeat` |
+| `GET /cluster/scaling-history` | Scaling 歷史紀錄 | 每 5 秒刷新與 SSE `cluster_updated` |
 
-> Infra 目前不會持久化 scale up/down events，因此前端停用 Scaling history，
-> 也不呼叫 `GET /cluster/scaling-history`。
+`GET /cluster/status` 的 `autoscaler` 欄位包含：
+
+```json
+{
+  "min_workers": 0,
+  "max_workers": 5,
+  "cooldown_remaining": 0,
+  "last_scaled_at": null,
+  "last_action": "none"
+}
+```
+
+`GET /cluster/scaling-history` 回傳格式：
+
+```json
+{
+  "history": [
+    {
+      "timestamp": "2026-06-06T04:53:04.798696Z",
+      "action": "scale_up",
+      "worker_id": "f0e60ac4c0a8",
+      "trigger_reason": "pending_tasks=0, worker_count=1→2"
+    }
+  ]
+}
+```
 
 ---
 
@@ -225,13 +341,16 @@ data: {"event":"order_updated","data":{"order_id":"order-uuid-1234","status":"ma
 
 | 介面 | 頁面/區塊 | API | 更新方式 |
 |---|---|---|---|
+| 使用者 | 叫車頁首頁 | `GET /cluster/eta` | 每 4 秒刷新 |
 | 使用者 | 確認叫車 | `POST /orders` | 一次性 REST |
 | 使用者 | 配對中畫面 | `SSE order_updated` (matching) | SSE push |
+| 使用者 | 配對中取消訂單 | `POST /orders/{order_id}/cancel` | 一次性 REST + SSE `cancelled` |
 | 使用者 | 司機前往中畫面 | `SSE order_updated` (driver_assigned + trip{}) | SSE push |
 | 使用者 | 行程中畫面 | `SSE order_updated` (on_trip) | SSE push |
 | 使用者 | 行程完成畫面 | `SSE order_updated` (completed + result{}) | SSE push |
 | Admin | 訂單列表 | `GET /orders` | SSE push |
-| Admin | Cluster 節點狀態 | `GET /cluster/status` | SSE heartbeat |
+| Admin | Overview / Cluster | `GET /cluster/status` | 每 5 秒刷新與 SSE heartbeat |
+| Admin | Scaling history | `GET /cluster/scaling-history` | 每 5 秒刷新與 SSE cluster_updated |
 
 ---
 
@@ -251,4 +370,4 @@ app.add_middleware(
 
 ---
 
-*文件版本：v2.2 | 最後更新：2026-06-05*
+*文件版本：v2.4 | 最後更新：2026-06-06*

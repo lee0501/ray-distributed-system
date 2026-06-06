@@ -69,6 +69,25 @@ function StatusPill({ status }) {
   )
 }
 
+// ─── EtaBadge（資料來自 GET /cluster/eta）───
+function EtaBadge({ waitMin, surge }) {
+  return (
+    <div style={{
+      display: "inline-flex", alignItems: "center", gap: 6,
+      background: surge ? TOKEN.amberLight : TOKEN.greenLight,
+      color: surge ? "#92400e" : "#166534",
+      padding: "5px 12px", borderRadius: 999, fontSize: 12, fontWeight: 500,
+    }}>
+      <div style={{
+        width: 6, height: 6, borderRadius: "50%",
+        background: surge ? TOKEN.amber : TOKEN.green,
+        animation: "blink 1.5s ease-in-out infinite",
+      }} />
+      {surge ? "⚡ 尖峰" : `約 ${waitMin} 分鐘`}
+    </div>
+  )
+}
+
 // ─── LocationInput ───
 function LocationInput({ icon, label, placeholder, value, onChange, autoFocus }) {
   return (
@@ -235,7 +254,7 @@ function MapPlaceholder({ height = 200, showCar = false }) {
 }
 
 // ─── Screen: 叫車頁 ───
-function HomeScreen({ onNext }) {
+function HomeScreen({ onNext, etaData }) {
   const [origin, setOrigin] = useState("台北車站")
   const [dest, setDest] = useState("松山機場")
   const [rideType, setRideType] = useState("standard")
@@ -253,7 +272,10 @@ function HomeScreen({ onNext }) {
       }}>
         <div style={{ width:36, height:3, borderRadius:999, background:TOKEN.gray200, margin:"0 auto 2px" }}/>
 
-        <span style={{ fontSize:15, fontWeight:600, color:TOKEN.black }}>你要去哪裡？</span>
+        <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between" }}>
+          <span style={{ fontSize:15, fontWeight:600, color:TOKEN.black }}>你要去哪裡？</span>
+          <EtaBadge waitMin={etaData.waitMin} surge={etaData.surge} />
+        </div>
 
         {/* location inputs */}
         <div style={{
@@ -273,7 +295,7 @@ function HomeScreen({ onNext }) {
 
         <button
           style={S.btnPrimary}
-          onClick={() => onNext({ origin, dest, rideType, price: priceMap[rideType] })}
+          onClick={() => onNext({ origin, dest, rideType, price: priceMap[rideType], waitMin: etaData.waitMin })}
           disabled={!origin || !dest}
         >
           確認叫車
@@ -312,6 +334,7 @@ function ConfirmScreen({ orderData, onBack, onSubmit, submitting, errorMsg }) {
           {[
             ["車型", orderData.rideType === "standard" ? "標準" : "優選"],
             ["預估費用", `$${orderData.price}`],
+            ["預估等待", `約 ${orderData.waitMin} 分鐘`],
           ].map(([k,v]) => (
             <div key={k} style={{ display:"flex", justifyContent:"space-between", fontSize:13, padding:"5px 0" }}>
               <span style={{ color:TOKEN.gray400 }}>{k}</span>
@@ -590,6 +613,7 @@ export default function RideApp() {
   const [screen, setScreen] = useState("home")   // home | confirm | matching | driver | trip | done
   const [orderData, setOrderData] = useState(null)
   const [tripStatus, setTripStatus] = useState("pending")
+  const [etaData, setEtaData] = useState({ waitMin:2, surge:false })
   const [driverInfo, setDriverInfo] = useState({ name:"王大明", rating:4.8, plate:"ABC-1234", eta:4 })
   const [fare, setFare] = useState(268)
   const [tripElapsed, setTripElapsed] = useState(0)
@@ -597,6 +621,14 @@ export default function RideApp() {
   const [errorMsg, setErrorMsg] = useState(null)        // 叫車失敗訊息
   const TRIP_TOTAL = 20
   const unsubRef = useRef(null)
+
+  // ── GET /cluster/eta polling
+  useEffect(() => {
+    const refreshEta = () => api.getEta().then(setEtaData).catch(() => {})
+    refreshEta()
+    const id = setInterval(refreshEta, 4000)
+    return () => clearInterval(id)
+  }, [])
 
   // ── 行程中進度條計時器
   useEffect(() => {
@@ -780,7 +812,7 @@ export default function RideApp() {
         </div>
 
         <div style={{ flex:1, display:"flex", flexDirection:"column", overflow:"hidden", minHeight:0 }}>
-          {screen === "home"    && <HomeScreen onNext={handleConfirm} />}
+          {screen === "home"    && <HomeScreen onNext={handleConfirm} etaData={etaData} />}
           {screen === "confirm" && orderData && <ConfirmScreen orderData={orderData} onBack={() => setScreen("home")} onSubmit={handleSubmit} submitting={submitting} errorMsg={errorMsg} />}
           {screen === "matching"&& <MatchingScreen tripStatus={tripStatus} onCancel={handleRestart} />}
           {screen === "driver"  && <DriverScreen driverInfo={driverInfo} />}

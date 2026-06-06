@@ -22,6 +22,34 @@ function formatOrderTime(timestamp) {
   })
 }
 
+function formatEventTime(timestamp) {
+  if (!timestamp) return "—"
+  return new Date(timestamp).toLocaleTimeString([], {
+    hour: "2-digit",
+    minute: "2-digit",
+  })
+}
+
+function mapWorker(worker) {
+  const cpuTotal = Number(worker.cpu_total) || 0
+  const cpuUsed = Number(worker.cpu_used) || 0
+  return {
+    id: worker.node_id ?? worker.ip ?? "unknown",
+    role: worker.ip === "ray-head" ? "head" : "worker",
+    status: worker.status ?? "alive",
+    cpu: cpuTotal > 0 ? cpuUsed / cpuTotal : 0,
+  }
+}
+
+function mapScalingEvent(event) {
+  return {
+    time: formatEventTime(event.timestamp),
+    action: event.action ?? "none",
+    worker: event.worker_id ?? "—",
+    reason: event.trigger_reason ?? "—",
+  }
+}
+
 // Convert the backend OrderManager contract into the shape used by RayAdminApp.
 function mapAdminOrder(order, previous = {}) {
   const status = order.status ?? previous.status ?? "pending"
@@ -37,6 +65,18 @@ function mapAdminOrder(order, previous = {}) {
       order.updated_at ?? order.created_at ?? previous.updated_at ?? previous.created_at
     ),
     ...order,
+  }
+}
+
+// GET /cluster/eta
+export async function getEta() {
+  const res = await fetch(`${BASE}/cluster/eta`)
+  if (!res.ok) throw new Error(`GET /cluster/eta failed: ${res.status}`)
+  const data = await res.json()
+  const seconds = Number(data.estimated_wait_seconds)
+  return {
+    waitMin: Number.isFinite(seconds) ? Math.max(0, Math.ceil(seconds / 60)) : 0,
+    surge: Boolean(data.surge),
   }
 }
 
@@ -70,28 +110,36 @@ export function subscribeRideOrder(orderId, callback) {
   return () => source.close()
 }
 
-// Admin Overview currently uses GET /orders + GET /cluster/status.
-// GET /cluster/scaling-history is disabled because infra does not persist scale events.
+// Admin pages load orders, cluster status, and scaling history in parallel.
 export async function getAdminSnapshot() {
-  const [ordersRes, statusRes] = await Promise.all([
+  const [ordersRes, statusRes, historyRes] = await Promise.all([
     fetch(`${BASE}/orders`),
-    fetch(`${BASE}/cluster/status`).catch(() => null),
-    // fetch(`${BASE}/cluster/scaling-history`),
+    fetch(`${BASE}/cluster/status`),
+    fetch(`${BASE}/cluster/scaling-history`),
   ])
+  if (!ordersRes.ok || !statusRes.ok || !historyRes.ok) {
+    throw new Error("Failed to load admin snapshot")
+  }
   const ordersData = await ordersRes.json()
-  const status = statusRes?.ok ? await statusRes.json() : null
+  const status = await statusRes.json()
+  const historyData = await historyRes.json()
 
   return {
     orders: (ordersData.orders ?? ordersData).map(order => mapAdminOrder(order)),
-    workers: status?.workers ?? [],
-    // logs: history,
-    metrics: status ? {
+    workers: (status.workers ?? []).map(mapWorker),
+    logs: (historyData.history ?? historyData ?? []).map(mapScalingEvent),
+    metrics: {
       workers: status.worker_count ?? status.metrics?.workers ?? 0,
       pending: status.pending_tasks ?? status.metrics?.pending ?? 0,
       cpu: Math.round((status.cpu_usage?.percent ?? status.metrics?.cpu ?? 0) * (
         status.cpu_usage?.percent != null && status.cpu_usage.percent <= 1 ? 100 : 1
       )),
-    } : { workers: 0, pending: 0, cpu: 0 },
+      cooldown: status.autoscaler?.cooldown_remaining ?? 0,
+      cooldownTotal: 15,
+      lastAction: status.autoscaler?.last_action ?? "none",
+      minWorkers: status.autoscaler?.min_workers ?? 0,
+      maxWorkers: status.autoscaler?.max_workers ?? 5,
+    },
   }
 }
 
@@ -104,9 +152,17 @@ export function subscribeAdminUpdates(callback) {
     if (event === "order_updated") {
       callback({ orderUpdate: mapAdminOrder(data) })
     }
+    if (event === "cluster_updated") {
+      callback({
+        scalingEvent: mapScalingEvent(data),
+        metrics: {
+          workers: data.worker_count,
+          pending: data.pending_tasks,
+          lastAction: data.action,
+        },
+      })
+    }
 
-    // PR #7 currently sends heartbeat with empty data. Only update Overview
-    // metrics after the backend provides all required cluster fields.
     if (
       event === "heartbeat" &&
       data.worker_count != null &&
@@ -118,8 +174,6 @@ export function subscribeAdminUpdates(callback) {
           workers:    data.worker_count,
           pending:    data.pending_tasks,
           cpu:        Math.round(data.cpu_percent * 100),
-          // cooldown: 0,
-          // lastAction: "—",
         },
       })
     }

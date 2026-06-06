@@ -2,6 +2,11 @@
 
 const mockOrderRegistry = {} //這裡用來記訂單的資料 key會是訂單的ID value會是訂單的內容（因為後面我設計有不同function都需要用到訂單的資料資訊）
 
+export async function getEta() { //模擬叫車頁面的即時預估等待
+  const waitMin = Math.max(1, Math.round(Math.random() * 3 + 1))
+  return { waitMin, surge: waitMin > 3 }
+}
+
 export async function createRideOrder(payload) { //這裡資料從訂單頁傳進來（包含上下車地點、車型選擇、價格）
   const orderId = "mock-" + Date.now() // 產訂單ID(這個是唯一)
   mockOrderRegistry[orderId] = { price: payload.price || 260 } //這個價錢我在使用者端的前端檔案有寫兩個車種的預設價格（寫死因為只是模擬就不討論動態定價）
@@ -52,26 +57,28 @@ const INITIAL_WORKERS = [
   { id: "ray-worker-2", role: "worker", status: "alive", cpu: 0.58 },
 ]
 
-// Scaling logs are disabled because infra does not persist scale events. 
-// const INITIAL_LOGS = [
-//   { time: "14:20", action: "scale_up",   worker: "ray-worker-2", reason: "pending=5, polls=3" },
-//   { time: "14:10", action: "scale_down", worker:"ray-worker-3", reason: "cpu=4% < 10%"       },
-//   { time: "13:55", action: "scale_up",   worker: "ray-worker-2", reason: "pending=4, polls=3" },
-// ]
+const INITIAL_LOGS = [
+  { time: "14:20", action: "scale_up",   worker: "ray-worker-2", reason: "pending=5, polls=3" },
+  { time: "14:10", action: "scale_down", worker:"ray-worker-3", reason: "cpu=4% < 10%"       },
+  { time: "13:55", action: "scale_up",   worker: "ray-worker-2", reason: "pending=4, polls=3" },
+]
 
 const INITIAL_METRICS = {
   workers: 2,
   pending: 5,
   cpu: 72,
-  // cooldown: 8,
-  // lastAction: "scale_up",
+  cooldown: 8,
+  cooldownTotal: 15,
+  lastAction: "scale_up",
+  minWorkers: 0,
+  maxWorkers: 5,
 }
 
 export async function getAdminSnapshot() {
   return {
     orders:  INITIAL_ORDERS.map(o => ({ ...o })), //每一筆資料都做一次copy,用來避開修改的話會改到原始資料確保資料獨立
     workers: INITIAL_WORKERS.map(w => ({ ...w })),
-    // logs: INITIAL_LOGS.map(l => ({ ...l })),
+    logs: INITIAL_LOGS.map(l => ({ ...l })),
     metrics: { ...INITIAL_METRICS },
   }
 }
@@ -94,7 +101,7 @@ export function subscribeAdminUpdates(callback) { //自己維護一份的order &
 
     metrics = {
       ...metrics,
-      // cooldown: Math.max(0, metrics.cooldown - 1),
+      cooldown: Math.max(0, metrics.cooldown - 1),
       pending:  Math.max(0, metrics.pending + (Math.random() > 0.6 ? 1 : -1)), //隨機做加減先模擬任務數量的變動來試新增、砍掉的效果
     }
 
