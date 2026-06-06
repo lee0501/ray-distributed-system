@@ -14,20 +14,33 @@ const ORDER_PROGRESS = {
   cancelled: 100,
 }
 
-function formatOrderTime(timestamp) {
-  if (!timestamp) return "—"
-  return new Date(timestamp).toLocaleTimeString([], {
+function parseApiTimestamp(timestamp) {
+  if (!timestamp) return null
+  const normalized = typeof timestamp === "string" &&
+    !/[zZ]|[+-]\d{2}:\d{2}$/.test(timestamp)
+    ? `${timestamp}Z`
+    : timestamp
+  const date = new Date(normalized)
+  return Number.isNaN(date.getTime()) ? null : date
+}
+
+function formatTaipeiTime(timestamp) {
+  const date = parseApiTimestamp(timestamp)
+  if (!date) return "—"
+  return date.toLocaleTimeString("zh-TW", {
+    timeZone: "Asia/Taipei",
     hour: "2-digit",
     minute: "2-digit",
+    hour12: false,
   })
 }
 
+function formatOrderTime(timestamp) {
+  return formatTaipeiTime(timestamp)
+}
+
 function formatEventTime(timestamp) {
-  if (!timestamp) return "—"
-  return new Date(timestamp).toLocaleTimeString([], {
-    hour: "2-digit",
-    minute: "2-digit",
-  })
+  return formatTaipeiTime(timestamp)
 }
 
 function mapWorker(worker) {
@@ -62,7 +75,14 @@ function mapAdminOrder(order, previous = {}) {
     elapsed: ORDER_PROGRESS[status] ?? previous.elapsed ?? 0,
     total: 100,
     ts: formatOrderTime(
-      order.updated_at ?? order.created_at ?? previous.updated_at ?? previous.created_at
+      order.updated_at ??
+      order.completed_at ??
+      order.started_at ??
+      order.created_at ??
+      previous.updated_at ??
+      previous.completed_at ??
+      previous.started_at ??
+      previous.created_at
     ),
     ...order,
   }

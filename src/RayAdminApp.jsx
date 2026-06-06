@@ -38,10 +38,13 @@ function MetricCard({ label, value, sub, fillPct, fillColor }) {
 }
 
 // ─── Order Row ───
-function OrderRow({ order }) {
+function OrderRow({ order, compact = false }) {
   return (
     <div style={{
-      display: "grid", gridTemplateColumns: "150px 140px 140px minmax(90px,1fr)",
+      display: "grid",
+      gridTemplateColumns: compact
+        ? "minmax(72px,1fr) minmax(58px,0.8fr) minmax(110px,1fr) 48px"
+        : "150px 140px 140px minmax(90px,1fr)",
       alignItems: "center", gap: 8,
       background: T.white, border: `0.5px solid ${T.gray200}`,
       borderRadius: 10, padding: "10px 14px", fontSize: 14,
@@ -166,17 +169,17 @@ function OverviewPage({ metrics, orders, logs, setPage }) {
         <MetricCard label="CPU usage"      value={`${metrics.cpu}%`} sub={`${(metrics.cpu/100*2).toFixed(2)} / 2.0 cores`} fillPct={metrics.cpu} fillColor={T.teal200} />
         <MetricCard label="Cooldown"       value={`${metrics.cooldown}s`} sub={`last: ${metrics.lastAction}`} fillPct={metrics.cooldown/metrics.cooldownTotal*100} fillColor={T.purple200} />
       </div>
-      <div style={{ display:"grid", gridTemplateColumns:"1fr 260px", gap:16 }}>
+      <div style={{ display:"grid", gridTemplateColumns:"repeat(2,minmax(0,1fr))", gap:16 }}>
         <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
           <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between" }}>
             <span style={{ fontSize:13, fontWeight:500, color:T.gray600 }}>Recent orders</span>
             <button onClick={() => setPage("orders")} style={{ fontSize:12, padding:"5px 12px", border:`0.5px solid ${T.gray200}`, background:T.white, borderRadius:8, cursor:"pointer", color:T.black }}>View all →</button>
           </div>
-          <div style={{ display:"grid", gridTemplateColumns:"150px 140px 140px minmax(90px,1fr)", gap:8, padding:"4px 14px", fontSize:11, color:T.gray400 }}>
+          <div style={{ display:"grid", gridTemplateColumns:"minmax(72px,1fr) minmax(58px,0.8fr) minmax(110px,1fr) 48px", gap:8, padding:"4px 14px", fontSize:11, color:T.gray400 }}>
             <span>#</span><span>type</span><span>status</span><span style={{textAlign:"right"}}>time</span>
           </div>
           <div style={{ display:"flex", flexDirection:"column", gap:6 }}>
-            {orders.slice(0,3).map(o => <OrderRow key={o.id} order={o} />)}
+            {orders.slice(0,3).map(o => <OrderRow key={o.id} order={o} compact />)}
           </div>
         </div>
         <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
