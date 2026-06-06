@@ -14,17 +14,6 @@ const STATUS_CONFIG = {
   cancelled:       { label: "cancelled",        bg: T.gray100,     color: "#626262" },
 }
 
-const STATUS_PROGRESS = {
-  pending: 0,
-  matching: 1,
-  driver_assigned: 2,
-  running: 3,
-  on_trip: 3,
-  completed: 4,
-  failed: 4,
-  cancelled: 4,
-}
-
 function StatusPill({ status }) {
   const c = STATUS_CONFIG[status] || STATUS_CONFIG.pending
   return (
@@ -36,28 +25,25 @@ function StatusPill({ status }) {
 
 function mergeOrders(previous, incoming) {
   const merged = new Map(previous.map(order => [order.id, order]))
-  const incomingIds = new Set(incoming.map(order => order.id))
 
   incoming.forEach(order => {
     const existing = merged.get(order.id)
-    const status = existing &&
-      STATUS_PROGRESS[existing.status] > STATUS_PROGRESS[order.status]
-      ? existing.status
-      : order.status
+    const createdAt = order.createdAt || existing?.createdAt
+    const sortAt = createdAt || existing?.sortAt || order.sortAt
     merged.set(order.id, existing ? {
       ...existing,
       ...order,
-      status,
+      createdAt,
+      sortAt,
       type: order.type || existing.type,
       worker: order.worker === "—" ? existing.worker : order.worker,
-      ts: order.ts === "—" ? existing.ts : order.ts,
-    } : order)
+      ts: order.createdAt ? order.ts : existing.ts || order.ts,
+    } : { ...order, createdAt, sortAt })
   })
 
-  return [
-    ...incoming.map(order => merged.get(order.id)),
-    ...previous.filter(order => !incomingIds.has(order.id)),
-  ]
+  return [...merged.values()].sort((a, b) =>
+    new Date(b.sortAt || 0).getTime() - new Date(a.sortAt || 0).getTime()
+  )
 }
 
 // ─── Metric Card ───
@@ -216,7 +202,7 @@ function OverviewPage({ metrics, orders, logs, setPage }) {
             <span>#</span><span>type</span><span>status</span><span style={{textAlign:"right"}}>time</span>
           </div>
           <div style={{ display:"flex", flexDirection:"column", gap:6 }}>
-            {orders.slice(0,3).map(o => <OrderRow key={o.id} order={o} compact />)}
+            {orders.slice(0,5).map(o => <OrderRow key={o.id} order={o} compact />)}
           </div>
         </div>
         <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
@@ -235,21 +221,37 @@ function OverviewPage({ metrics, orders, logs, setPage }) {
 // ─── Page: Orders ───
 function OrdersPage({ orders }) {
   const [filter, setFilter] = useState("all")
+  const [currentPage, setCurrentPage] = useState(1)
   const tabs = ["all","pending","matching","driver_assigned","on_trip","completed","cancelled","failed"]
+  const pageSize = 20
   const filtered = filter === "all" ? orders : orders.filter(o => o.status === filter)
+  const pageCount = Math.max(1, Math.ceil(filtered.length / pageSize))
+  const pageOrders = filtered.slice((currentPage - 1) * pageSize, currentPage * pageSize)
+
+  useEffect(() => {
+    setCurrentPage(page => Math.min(page, pageCount))
+  }, [pageCount])
 
   return (
     <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
       <div style={{ display:"flex", gap:0, borderBottom:`0.5px solid ${T.gray200}`, marginBottom:2 }}>
         {tabs.map(t => (
-          <button key={t} onClick={() => setFilter(t)} style={{ padding:"9px 16px", fontSize:12, cursor:"pointer", border:"none", background:"none", color: filter===t ? T.black : T.gray400, borderBottom: filter===t ? `2px solid ${T.blue}` : "2px solid transparent", fontWeight: filter===t ? 500 : 400, marginBottom:-0.5 }}>{t}</button>
+          <button key={t} onClick={() => { setFilter(t); setCurrentPage(1) }} style={{ padding:"9px 16px", fontSize:12, cursor:"pointer", border:"none", background:"none", color: filter===t ? T.black : T.gray400, borderBottom: filter===t ? `2px solid ${T.blue}` : "2px solid transparent", fontWeight: filter===t ? 500 : 400, marginBottom:-0.5 }}>{t}</button>
         ))}
       </div>
       <div style={{ display:"grid", gridTemplateColumns:"150px 140px 140px minmax(90px,1fr)", gap:8, padding:"4px 14px", fontSize:11, color:T.gray400 }}>
         <span>#</span><span>type</span><span>status</span><span style={{textAlign:"right"}}>time</span>
       </div>
       <div style={{ display:"flex", flexDirection:"column", gap:6 }}>
-        {filtered.map(o => <OrderRow key={o.id} order={o} />)}
+        {pageOrders.map(o => <OrderRow key={o.id} order={o} />)}
+        {pageOrders.length === 0 && <span style={{ fontSize:12, color:T.gray400, padding:"12px 14px" }}>No orders</span>}
+      </div>
+      <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginTop:4, fontSize:12, color:T.gray400 }}>
+        <span>{filtered.length} orders · page {currentPage} of {pageCount}</span>
+        <div style={{ display:"flex", gap:6 }}>
+          <button disabled={currentPage === 1} onClick={() => setCurrentPage(page => page - 1)} style={{ border:`0.5px solid ${T.gray200}`, background:T.white, borderRadius:8, padding:"6px 12px", cursor:currentPage === 1 ? "default" : "pointer", color:currentPage === 1 ? T.gray300 : T.black }}>Previous</button>
+          <button disabled={currentPage === pageCount} onClick={() => setCurrentPage(page => page + 1)} style={{ border:`0.5px solid ${T.gray200}`, background:T.white, borderRadius:8, padding:"6px 12px", cursor:currentPage === pageCount ? "default" : "pointer", color:currentPage === pageCount ? T.gray300 : T.black }}>Next</button>
+        </div>
       </div>
     </div>
   )

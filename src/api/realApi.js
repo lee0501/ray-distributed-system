@@ -66,25 +66,26 @@ function mapScalingEvent(event) {
 // Convert the backend OrderManager contract into the shape used by RayAdminApp.
 function mapAdminOrder(order, previous = {}) {
   const status = order.status ?? previous.status ?? "pending"
+  const createdAt = order.created_at ?? previous.createdAt ?? null
+  const updatedAt =
+    order.updated_at ??
+    order.completed_at ??
+    order.started_at ??
+    order.created_at ??
+    previous.updatedAt
   return {
     ...previous,
+    ...order,
     id: order.order_id ?? previous.id,
     type: order.order_type ?? previous.type ?? "ride",
     status,
+    createdAt,
+    updatedAt,
+    sortAt: createdAt ?? previous.sortAt ?? updatedAt,
     worker: order.worker_node ?? previous.worker ?? "—",
     elapsed: ORDER_PROGRESS[status] ?? previous.elapsed ?? 0,
     total: 100,
-    ts: formatOrderTime(
-      order.updated_at ??
-      order.completed_at ??
-      order.started_at ??
-      order.created_at ??
-      previous.updated_at ??
-      previous.completed_at ??
-      previous.started_at ??
-      previous.created_at
-    ),
-    ...order,
+    ts: formatOrderTime(createdAt ?? updatedAt),
   }
 }
 
