@@ -4,14 +4,14 @@ import { TOKEN as T } from "./theme"
 
 // ─── 共用 Status pill（與 RideApp.jsx 共用相同設計語言）───
 const STATUS_CONFIG = {
-  pending:         { label: "pending",         bg: T.amberLight,  color: "#92400e" },
+  pending:         { label: "pending",         bg: T.amberLight,  color: "#ba9482" },
   matching:        { label: "matching",         bg: T.blueLight,   color: "#1e40af" },
-  driver_assigned: { label: "driver_assigned",  bg: T.greenLight,  color: "#166534" },
+  driver_assigned: { label: "driver_assigned",  bg: T.greenLight,  color: "#f6f600" },
   on_trip:         { label: "on_trip",          bg: T.purpleLight, color: "#5b21b6" },
-  running:         { label: "running",          bg: T.blueLight,   color: "#1e40af" },
+  running:         { label: "running",          bg: T.blueLight,   color: "#60c9e9" },
   completed:       { label: "completed",        bg: T.greenLight,  color: "#166534" },
-  failed:          { label: "failed",           bg: T.redLight,    color: "#991b1b" },
-  cancelled:       { label: "cancelled",        bg: T.gray100,     color: T.gray600 },
+  failed:          { label: "failed",           bg: T.redLight,    color: "#cf2b2b" },
+  cancelled:       { label: "cancelled",        bg: T.gray100,     color: "#626262" },
 }
 
 function StatusPill({ status }) {
@@ -195,7 +195,7 @@ function OverviewPage({ metrics, orders, logs, setPage }) {
 // ─── Page: Orders ───
 function OrdersPage({ orders }) {
   const [filter, setFilter] = useState("all")
-  const tabs = ["all","pending","running","completed","failed"]
+  const tabs = ["all","pending","running","completed","cancelled","failed"]
   const filtered = filter === "all" ? orders : orders.filter(o => o.status === filter)
 
   return (
