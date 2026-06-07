@@ -118,6 +118,18 @@ export async function createRideOrder(payload) {
   return res.json()  // { order_id, status: "pending", ... }
 }
 
+// POST /orders/{order_id}/cancel //按下取消訂單後台要把訂單切換到cancel狀態
+export async function cancelRideOrder(orderId) {
+  const res = await fetch(`${BASE}/orders/${encodeURIComponent(orderId)}/cancel`, {
+    method: "POST",
+  })
+  const data = await res.json()
+  if (!res.ok) {
+    throw new Error(data.error || `POST /orders/${orderId}/cancel failed: ${res.status}`)
+  }
+  return data
+}
+
 // GET /sse → order_updated events
 // callback receives: { status, trip?, result? }
 export function subscribeRideOrder(orderId, callback) {

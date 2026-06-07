@@ -368,7 +368,7 @@ function ConfirmScreen({ orderData, onBack, onSubmit, submitting, errorMsg }) {
 }
 
 // ─── Screen: 配對中 ───
-function MatchingScreen({ tripStatus, onCancel }) {
+function MatchingScreen({ tripStatus, onCancel, cancelling, cancelError }) {
   const steps = [
     { label:"訂單已建立", state:"done", time:"剛剛" },
     {
@@ -423,8 +423,17 @@ function MatchingScreen({ tripStatus, onCancel }) {
           {steps.map((s,i) => <ProgressStep key={i} {...s} />)}
         </div>
 
-        <button style={{ ...S.btnOutline, fontSize:13, padding:"10px 0" }} onClick={onCancel}>
-          取消訂單
+        {cancelError && (
+          <div style={{ color:"#991b1b", background:TOKEN.redLight, borderRadius:10, padding:"8px 12px", fontSize:12 }}>
+            {cancelError}
+          </div>
+        )}
+        <button
+          style={{ ...S.btnOutline, fontSize:13, padding:"10px 0", opacity:cancelling ? 0.6 : 1 }}
+          onClick={onCancel}
+          disabled={cancelling}
+        >
+          {cancelling ? "取消中…" : "取消訂單"}
         </button>
       </div>
     </div>
@@ -619,8 +628,30 @@ export default function RideApp() {
   const [tripElapsed, setTripElapsed] = useState(0)
   const [submitting, setSubmitting] = useState(false)  // 送出中，防重複點擊
   const [errorMsg, setErrorMsg] = useState(null)        // 叫車失敗訊息
+  const [currentOrderId, setCurrentOrderId] = useState(null)
+  const [cancelling, setCancelling] = useState(false)
+  const [cancelError, setCancelError] = useState(null)
   const TRIP_TOTAL = 20
   const unsubRef = useRef(null)
+
+  useEffect(() => {
+    const updateDeviceScale = () => {
+      const stage = document.querySelector(".device-stage")
+      if (!stage) return
+      const availableWidth = Math.max(1, window.innerWidth - 32)
+      const availableHeight = Math.max(1, window.innerHeight - 32)
+      const scale = Math.min(
+        1,
+        availableWidth / 390,
+        availableHeight / 844,
+      )
+      stage.style.setProperty("--device-scale", String(scale))
+    }
+
+    updateDeviceScale()
+    window.addEventListener("resize", updateDeviceScale)
+    return () => window.removeEventListener("resize", updateDeviceScale)
+  }, [])
 
   // ── GET /cluster/eta polling
   useEffect(() => {
@@ -656,6 +687,7 @@ export default function RideApp() {
     try {
       const { order_id } = await api.createRideOrder(orderData)
 
+      setCurrentOrderId(order_id)
       setTripStatus("pending")
       setScreen("matching")
 
@@ -674,6 +706,8 @@ export default function RideApp() {
           setErrorMsg("叫車失敗，請稍後再試")
           setScreen("confirm")
           if (unsubRef.current) { unsubRef.current(); unsubRef.current = null }
+        } else if (status === "cancelled") {
+          handleRestart()
         }
       })
     } catch (err) {
@@ -690,8 +724,24 @@ export default function RideApp() {
     setScreen("home")
     setTripStatus("pending")
     setOrderData(null)
+    setCurrentOrderId(null)
     setTripElapsed(0)
     setErrorMsg(null)
+    setCancelError(null)
+    setCancelling(false)
+  }
+
+  const handleCancel = async () => {
+    if (!currentOrderId || cancelling) return
+    setCancelling(true)
+    setCancelError(null)
+    try {
+      await api.cancelRideOrder(currentOrderId)
+      handleRestart()
+    } catch (err) {
+      setCancelError(err.message || "無法取消訂單，請稍後再試")
+      setCancelling(false)
+    }
   }
 
   return (
@@ -745,10 +795,11 @@ export default function RideApp() {
           }
           .device {
             position: relative;
-            width: 390px; height: min(844px, calc(100vh - 56px));
+            width: 390px; height: 844px;
             padding: 13px;
             background: linear-gradient(160deg, #2a2c30 0%, #0c0d0f 100%);
             border-radius: 56px;
+            transform: scale(var(--device-scale, 1));
             box-shadow:
               0 0 0 2px #3a3c40,
               0 30px 70px rgba(0,0,0,0.35),
@@ -814,7 +865,7 @@ export default function RideApp() {
         <div style={{ flex:1, display:"flex", flexDirection:"column", overflow:"hidden", minHeight:0 }}>
           {screen === "home"    && <HomeScreen onNext={handleConfirm} etaData={etaData} />}
           {screen === "confirm" && orderData && <ConfirmScreen orderData={orderData} onBack={() => setScreen("home")} onSubmit={handleSubmit} submitting={submitting} errorMsg={errorMsg} />}
-          {screen === "matching"&& <MatchingScreen tripStatus={tripStatus} onCancel={handleRestart} />}
+          {screen === "matching"&& <MatchingScreen tripStatus={tripStatus} onCancel={handleCancel} cancelling={cancelling} cancelError={cancelError} />}
           {screen === "driver"  && <DriverScreen driverInfo={driverInfo} />}
           {screen === "trip"    && <TripScreen orderData={orderData} tripElapsed={tripElapsed} tripTotal={TRIP_TOTAL} />}
           {screen === "done"    && <DoneScreen fare={fare} onRestart={handleRestart} />}

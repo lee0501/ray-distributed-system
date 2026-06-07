@@ -49,7 +49,7 @@ function mergeOrders(previous, incoming) {
 // ─── Metric Card ───
 function MetricCard({ label, value, sub, fillPct, fillColor }) {
   return (
-    <div style={{ background: T.white, border: `0.5px solid ${T.gray200}`, borderRadius: 12, padding: "14px 16px" }}>
+    <div className="admin-metric-card" style={{ background: T.white, border: `0.5px solid ${T.gray200}`, borderRadius: 12, padding: "14px 16px" }}>
       <div style={{ fontSize: 11, color: T.gray400, textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 6 }}>{label}</div>
       <div style={{ fontSize: 26, fontWeight: 500, color: T.black, lineHeight: 1 }}>{value}</div>
       <div style={{ fontSize: 11, color: T.gray400, marginTop: 4 }}>{sub}</div>
@@ -63,7 +63,7 @@ function MetricCard({ label, value, sub, fillPct, fillColor }) {
 // ─── Order Row ───
 function OrderRow({ order, compact = false }) {
   return (
-    <div style={{
+    <div className={`admin-order-row${compact ? " admin-order-row--compact" : ""}`} style={{
       display: "grid",
       gridTemplateColumns: compact
         ? "minmax(72px,1fr) minmax(58px,0.8fr) minmax(110px,1fr) 48px"
@@ -119,15 +119,15 @@ function WorkerCard({ worker }) {
 function LogRow({ log }) {
   const isUp = log.action === "scale_up"
   return (
-    <div style={{
+    <div className="admin-log-row" style={{
       display: "flex", alignItems: "center", gap: 8,
       fontSize: 11, padding: "6px 12px", borderRadius: 10,
       background: T.white, border: `0.5px solid ${T.gray200}`,
     }}>
       <span style={{ color: T.gray400, minWidth: 38, fontFamily: "monospace" }}>{log.time}</span>
       <span style={{ color: isUp ? "#1e40af" : "#993C1D", fontSize: 13 }}>{isUp ? "↑" : "↓"}</span>
-      <span style={{ color: T.gray600, flex: 1 }}>{log.action} → {log.worker}</span>
-      <span style={{ color: T.gray400, fontSize: 10 }}>{log.reason}</span>
+      <span className="admin-log-action" style={{ color: T.gray600, flex: 1 }}>{log.action} → {log.worker}</span>
+      <span className="admin-log-reason" style={{ color: T.gray400, fontSize: 10 }}>{log.reason}</span>
     </div>
   )
 }
@@ -142,24 +142,24 @@ function Sidebar({ page, setPage }) {
     { key: "cluster", label: "Cluster nodes", icon: "◫" },
   ]
   const navBtn = (n) => (
-    <button key={n.key} onClick={() => setPage(n.key)}
+    <button className="admin-nav-button" key={n.key} onClick={() => setPage(n.key)}
       style={{ display:"flex", alignItems:"center", gap:9, padding:"8px 18px", fontSize:13, cursor:"pointer", border:"none", background: page===n.key ? T.gray100 : "none", width:"100%", textAlign:"left", color: page===n.key ? T.black : T.gray600, fontWeight: page===n.key ? 500 : 400, transition:"background .12s" }}>
       <span style={{ fontSize: 15 }}>{n.icon}</span>{n.label}
     </button>
   )
   return (
-    <div style={{ width: 200, flexShrink: 0, background: T.white, borderRight: `0.5px solid ${T.gray200}`, display: "flex", flexDirection: "column" }}>
-      <div style={{ padding: "20px 18px 16px", borderBottom: `0.5px solid ${T.gray200}` }}>
+    <div className="admin-sidebar" style={{ width: 200, flexShrink: 0, background: T.white, borderRight: `0.5px solid ${T.gray200}`, display: "flex", flexDirection: "column" }}>
+      <div className="admin-sidebar-brand" style={{ padding: "20px 18px 16px", borderBottom: `0.5px solid ${T.gray200}` }}>
         <div style={{ fontSize: 14, fontWeight: 600, color: T.black }}>Ray Admin</div>
         <div style={{ fontSize: 11, color: T.gray400, marginTop: 2 }}>Distributed cluster UI</div>
       </div>
-      <div style={{ padding: "10px 0", flex: 1 }}>
-        <div style={{ fontSize: 10, color: T.gray400, padding: "4px 18px", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 2 }}>Main</div>
+      <div className="admin-sidebar-nav" style={{ padding: "10px 0", flex: 1 }}>
+        <div className="admin-nav-label" style={{ fontSize: 10, color: T.gray400, padding: "4px 18px", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 2 }}>Main</div>
         {mainItems.map(navBtn)}
-        <div style={{ fontSize: 10, color: T.gray400, padding: "12px 18px 4px", textTransform: "uppercase", letterSpacing: "0.06em" }}>Infrastructure</div>
+        <div className="admin-nav-label" style={{ fontSize: 10, color: T.gray400, padding: "12px 18px 4px", textTransform: "uppercase", letterSpacing: "0.06em" }}>Infrastructure</div>
         {infraItems.map(navBtn)}
       </div>
-      <div style={{ padding: "12px 18px", borderTop: `0.5px solid ${T.gray200}`, fontSize: 11, color: T.gray400 }}>
+      <div className="admin-sidebar-footer" style={{ padding: "12px 18px", borderTop: `0.5px solid ${T.gray200}`, fontSize: 11, color: T.gray400 }}>
         Ray local autoscaler v0.1
       </div>
     </div>
@@ -169,12 +169,12 @@ function Sidebar({ page, setPage }) {
 // ─── Topbar ───
 function Topbar({ title, sseConnected, onToggleSSE }) {
   return (
-    <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"14px 24px", background:T.white, borderBottom:`0.5px solid ${T.gray200}`, flexShrink:0 }}>
+    <div className="admin-topbar" style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"14px 24px", background:T.white, borderBottom:`0.5px solid ${T.gray200}`, flexShrink:0 }}>
       <span style={{ fontSize: 15, fontWeight: 500, color: T.black }}>{title}</span>
       <div style={{ display:"flex", alignItems:"center", gap:10 }}>
-        <div style={{ display:"flex", alignItems:"center", gap:6, fontSize:12, color:T.gray600, background:T.gray100, padding:"5px 12px", borderRadius:999, border:`0.5px solid ${T.gray200}` }}>
+        <div className="admin-sse-pill" style={{ display:"flex", alignItems:"center", gap:6, fontSize:12, color:T.gray600, background:T.gray100, padding:"5px 12px", borderRadius:999, border:`0.5px solid ${T.gray200}` }}>
           <div style={{ width:7, height:7, borderRadius:"50%", background: sseConnected ? T.green : T.gray300, animation: sseConnected ? "blink 1.8s ease-in-out infinite" : "none" }}/>
-          {sseConnected ? "SSE connected" : "Disconnected"}
+          <span className="admin-sse-label">{sseConnected ? "SSE connected" : "Disconnected"}</span>
         </div>
         <button onClick={onToggleSSE} style={{ border:`0.5px solid ${T.gray200}`, background:T.white, borderRadius:8, padding:"6px 10px", cursor:"pointer", fontSize:13, color:T.black }}>↻</button>
       </div>
@@ -186,19 +186,19 @@ function Topbar({ title, sseConnected, onToggleSSE }) {
 function OverviewPage({ metrics, orders, logs, setPage }) {
   return (
     <div style={{ display:"flex", flexDirection:"column", gap:16 }}>
-      <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:12 }}>
+      <div className="admin-metrics-grid" style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:12 }}>
         <MetricCard label="Workers alive"  value={metrics.workers}  sub={`max ${metrics.maxWorkers} nodes`}  fillPct={metrics.workers/metrics.maxWorkers*100}   fillColor={T.blue200}   />
         <MetricCard label="Pending resource demands"  value={metrics.pending}  sub="in queue"     fillPct={metrics.pending/10*100}  fillColor={T.amber200}  />
         <MetricCard label="CPU usage"      value={`${metrics.cpu}%`} sub={`${(metrics.cpu/100*2).toFixed(2)} / 2.0 cores`} fillPct={metrics.cpu} fillColor={T.teal200} />
         <MetricCard label="Cooldown"       value={`${metrics.cooldown}s`} sub={`last: ${metrics.lastAction}`} fillPct={metrics.cooldown/metrics.cooldownTotal*100} fillColor={T.purple200} />
       </div>
-      <div style={{ display:"grid", gridTemplateColumns:"repeat(2,minmax(0,1fr))", gap:16 }}>
+      <div className="admin-overview-grid" style={{ display:"grid", gridTemplateColumns:"repeat(2,minmax(0,1fr))", gap:16 }}>
         <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
           <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between" }}>
             <span style={{ fontSize:13, fontWeight:500, color:T.gray600 }}>Recent orders</span>
             <button onClick={() => setPage("orders")} style={{ fontSize:12, padding:"5px 12px", border:`0.5px solid ${T.gray200}`, background:T.white, borderRadius:8, cursor:"pointer", color:T.black }}>View all →</button>
           </div>
-          <div style={{ display:"grid", gridTemplateColumns:"minmax(72px,1fr) minmax(58px,0.8fr) minmax(110px,1fr) 48px", gap:8, padding:"4px 14px", fontSize:11, color:T.gray400 }}>
+          <div className="admin-order-header admin-order-header--compact" style={{ display:"grid", gridTemplateColumns:"minmax(72px,1fr) minmax(58px,0.8fr) minmax(110px,1fr) 48px", gap:8, padding:"4px 14px", fontSize:11, color:T.gray400 }}>
             <span>#</span><span>type</span><span>status</span><span style={{textAlign:"right"}}>time</span>
           </div>
           <div style={{ display:"flex", flexDirection:"column", gap:6 }}>
@@ -234,12 +234,12 @@ function OrdersPage({ orders }) {
 
   return (
     <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
-      <div style={{ display:"flex", gap:0, borderBottom:`0.5px solid ${T.gray200}`, marginBottom:2 }}>
+      <div className="admin-order-tabs" style={{ display:"flex", gap:0, borderBottom:`0.5px solid ${T.gray200}`, marginBottom:2 }}>
         {tabs.map(t => (
           <button key={t} onClick={() => { setFilter(t); setCurrentPage(1) }} style={{ padding:"9px 16px", fontSize:12, cursor:"pointer", border:"none", background:"none", color: filter===t ? T.black : T.gray400, borderBottom: filter===t ? `2px solid ${T.blue}` : "2px solid transparent", fontWeight: filter===t ? 500 : 400, marginBottom:-0.5 }}>{t}</button>
         ))}
       </div>
-      <div style={{ display:"grid", gridTemplateColumns:"150px 140px 140px minmax(90px,1fr)", gap:8, padding:"4px 14px", fontSize:11, color:T.gray400 }}>
+      <div className="admin-order-header" style={{ display:"grid", gridTemplateColumns:"150px 140px 140px minmax(90px,1fr)", gap:8, padding:"4px 14px", fontSize:11, color:T.gray400 }}>
         <span>#</span><span>type</span><span>status</span><span style={{textAlign:"right"}}>time</span>
       </div>
       <div style={{ display:"flex", flexDirection:"column", gap:6 }}>
@@ -286,7 +286,7 @@ function ClusterPage({ workers, logs, metrics }) {
 
       <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
         <span style={{ fontSize:13, fontWeight:500, color:T.gray600 }}>Scale policy</span>
-        <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:8 }}>
+        <div className="admin-policy-grid" style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:8 }}>
           {policyItems.map(([key,value,description]) => (
             <div key={key} style={{ background:T.white, border:`0.5px solid ${T.gray200}`, borderRadius:8, padding:14 }}>
               <div style={{ fontSize:11, color:T.gray400, marginBottom:4 }}>{key}</div>
@@ -355,12 +355,46 @@ export default function RayAdminApp() {
 
   return (
     <>
-      <style>{`@keyframes blink{0%,100%{opacity:1}50%{opacity:0.4}}`}</style>
-      <div style={{ display:"flex", height:"100vh", fontFamily:"-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif", background:T.gray100, color:T.black }}>
+      <style>{`
+        @keyframes blink{0%,100%{opacity:1}50%{opacity:0.4}}
+        @media (max-width: 900px) {
+          .admin-root { flex-direction: column; }
+          .admin-sidebar {
+            width: 100% !important; flex-direction: row !important; border-right: none !important;
+            border-bottom: 0.5px solid ${T.gray200}; flex-shrink: 0;
+          }
+          .admin-sidebar-brand, .admin-sidebar-footer, .admin-nav-label { display: none !important; }
+          .admin-sidebar-nav { display: flex !important; padding: 0 !important; overflow-x: auto; }
+          .admin-nav-button { width: auto !important; padding: 10px 14px !important; white-space: nowrap; }
+          .admin-content { padding: 16px !important; }
+          .admin-metrics-grid { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; }
+          .admin-overview-grid { grid-template-columns: minmax(0, 1fr) !important; }
+          .admin-policy-grid { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; }
+          .admin-order-tabs { overflow-x: auto; }
+          .admin-log-row { flex-wrap: wrap; }
+          .admin-log-action { min-width: 150px; }
+          .admin-log-reason { width: 100%; padding-left: 59px; overflow-wrap: anywhere; }
+        }
+        @media (max-width: 560px) {
+          .admin-topbar { padding: 12px 14px !important; }
+          .admin-content { padding: 12px !important; }
+          .admin-metrics-grid, .admin-policy-grid { grid-template-columns: minmax(0, 1fr) !important; }
+          .admin-order-row, .admin-order-header {
+            grid-template-columns: minmax(0, 1fr) minmax(96px, auto) !important;
+          }
+          .admin-order-row > :nth-child(4), .admin-order-header > :nth-child(4) { text-align: left !important; }
+          .admin-log-action { min-width: 0; }
+        }
+        @media (max-width: 380px) {
+          .admin-sse-label { display: none; }
+          .admin-sse-pill { padding: 8px !important; }
+        }
+      `}</style>
+      <div className="admin-root" style={{ display:"flex", height:"100vh", maxWidth:"100vw", overflow:"hidden", fontFamily:"-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif", background:T.gray100, color:T.black }}>
         <Sidebar page={page} setPage={setPage} />
-        <div style={{ flex:1, overflow:"hidden", display:"flex", flexDirection:"column" }}>
+        <div style={{ flex:1, minWidth:0, overflow:"hidden", display:"flex", flexDirection:"column" }}>
           <Topbar title={pageTitle[page]} sseConnected={sseConnected} onToggleSSE={() => setSseConnected(p => !p)} />
-          <div style={{ flex:1, overflowY:"auto", padding:"20px 24px" }}>
+          <div className="admin-content" style={{ flex:1, minWidth:0, overflowY:"auto", overflowX:"hidden", padding:"20px 24px" }}>
             {page === "overview" && <OverviewPage metrics={metrics} orders={orders} logs={logs} setPage={setPage} />}
             {page === "orders"   && <OrdersPage orders={orders} />}
             {page === "cluster" && <ClusterPage workers={workers} logs={logs} metrics={metrics} />}

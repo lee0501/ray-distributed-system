@@ -18,6 +18,14 @@ export async function createRideOrder(payload) { //這裡資料從訂單頁傳�
   }
 }
 
+export async function cancelRideOrder(orderId) {
+  if (!mockOrderRegistry[orderId]) {
+    throw new Error("order not found")
+  }
+  delete mockOrderRegistry[orderId]
+  return { order_id: orderId, status: "cancelled" }
+}
+
 // callback receives: { status, trip?, result? } 元件傳回來要長的樣態定義 每有一次的狀他變更就要呼叫一次做回傳
 // returns unsub function
 export function subscribeRideOrder(orderId, callback) {
